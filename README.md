@@ -69,19 +69,13 @@ Run the updater at least once before the draft (step 3.3). The draft board then 
 
 ---
 
-## What updates on its own and what doesn't
+## What updates on its own
 
-| Updates every hour, automatically | Entered on the Scores tab when it happens |
-|---|---|
-| NFL, NBA, NHL, MLB records | Playoff results: one dropdown per team, as each round ends |
-| Premier League record and table position | "Season over" checkbox for each league (locks in best-record and final-position bonuses) |
-| F1 drivers' championship position | Golf major finishes (4 times a year) |
-| Best regular-season record in each league | Tennis Grand Slam results (4 times a year) |
-| | Special event results |
+Every hour, automatically: regular-season records, Premier League and F1 standings, best record in each league, when each regular season ends, playoff progress round by round, golf major finishes and tennis Grand Slam results.
 
-The free score feeds don't reliably publish playoff brackets, golf leaderboards or tennis draws, so those few results are entered by hand. Anyone in the league can enter them.
+The commissioner (signed in with Google on the League tab) can correct anything on the Scores tab if a feed gets something wrong. A corrected playoff, golf or tennis result stays put until the commissioner changes it again. Special events (World Cups, Olympics) are set by the commissioner.
 
----
+Everyone else can view the league and make draft picks, but can't change scores or settings.
 
 ## Once a year
 

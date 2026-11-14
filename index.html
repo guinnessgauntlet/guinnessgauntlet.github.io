@@ -76,6 +76,17 @@ input.n{width:4.6em;font-family:var(--f-mono);text-align:center}
 .clock{background:var(--cream);color:var(--ink);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:6px}
 .clock .who{font-family:var(--f-display);font-weight:900;font-size:40px;line-height:.95;text-transform:uppercase}
 .clock .meta{font-size:14px;font-weight:500}
+.clockrow{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.clockrow>div:first-child{display:flex;flex-direction:column;gap:6px;min-width:0}
+.timer{display:flex;align-items:center;gap:10px;flex:none}
+.pint{width:58px;height:100px;color:var(--ink);overflow:visible}
+.pint .glass{fill:rgba(20,17,15,.07)}
+.timer.low .pint{color:var(--bad)}
+.tleft{font-family:var(--f-mono);font-size:26px;font-variant-numeric:tabular-nums;line-height:1}
+.timer.low .tleft{color:#b3402b}
+.tsub{font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;opacity:.7}
+.tctl{display:flex;gap:6px;flex-wrap:wrap}
+.tctl .btn.ghost{color:var(--ink);border-color:rgba(20,17,15,.3)}
 .you{display:inline-block;background:var(--amber);color:var(--ink);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;border-radius:999px;padding:2px 8px;vertical-align:middle}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
 .team{font:500 14px var(--f-body);text-align:left;background:var(--panel2);color:var(--cream);border:1px solid var(--rule);border-radius:6px;padding:9px 10px;cursor:pointer}
@@ -124,13 +135,21 @@ input.n{width:4.6em;font-family:var(--f-mono);text-align:center}
 <script type="module">
 /* ================= Firebase adapter ================= */
 const FB='https://www.gstatic.com/firebasejs/10.12.2/';
-let db=null,me=null;
+let db=null,me=null,email='',isCommish=false,AUTH=null;
 async function connect(){
   const cfg=window.GG_FIREBASE;
   if(!cfg||!cfg.apiKey||cfg.apiKey.startsWith('PASTE'))throw Object.assign(new Error('config'),{code:'no-config'});
   const [{initializeApp},F,A]=await Promise.all([import(FB+'firebase-app.js'),import(FB+'firebase-firestore.js'),import(FB+'firebase-auth.js')]);
   const app=initializeApp(cfg),fs=F.getFirestore(app),auth=A.getAuth(app);
-  const cred=await A.signInAnonymously(auth);me=cred.user.uid;
+  await new Promise((res,rej)=>{let first=true;A.onAuthStateChanged(auth,u=>{
+    if(!u){A.signInAnonymously(auth).catch(rej);return}
+    me=u.uid;email=(u.email||'').toLowerCase();
+    const done=c=>{isCommish=c;if(first){first=false;res()}else render()};
+    if(!email)return done(false);
+    crypto.subtle.digest('SHA-256',new TextEncoder().encode(email)).then(h=>{
+      const hex=[...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join('');
+      done(hex===String(window.GG_COMMISSIONER_HASH||'').trim().toLowerCase())}).catch(()=>done(false))})});
+  AUTH={signIn:()=>A.signInWithPopup(auth,new A.GoogleAuthProvider()),signOut:()=>A.signOut(auth)};
   const wrapSnapDoc=s=>({id:s.id,exists:s.exists(),data:()=>s.data(),metadata:s.metadata});
   const wrapD=r=>({id:r.id,get:async()=>wrapSnapDoc(await F.getDoc(r)),set:d=>F.setDoc(r,d),delete:()=>F.deleteDoc(r),
     onSnapshot:(n,e)=>F.onSnapshot(r,s=>n(wrapSnapDoc(s)),e)});
@@ -194,7 +213,7 @@ const rid=(sport,team)=>sport+'__'+slug(team);
 const mname=id=>S.members.find(m=>m.id===id)?.name||'Someone';
 function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,2800)}
 const B=k=>{const v=Number(S.cfg.bonus?.[k]);return Number.isFinite(v)?v:DEF_BONUS[k]};
-const isDone=id=>!!S.cfg.done?.[id];
+const isDone=id=>S.cfg.done?.[id]??!!S.meta[id]?.done;
 
 /* ================= Definitions ================= */
 const eventList=()=>[...EVENTS,...(S.cfg.customEvents||[]).map(c=>({...c,short:c.name.slice(0,10),when:'Custom event',ladder:GENERIC}))];
@@ -215,7 +234,7 @@ const posStage=(id,pos)=>{if(!pos)return 0;
 function pctOf(sp,r){if(!r)return null;const w=+r.w||0,l=+r.l||0,x=+r.x||0,gp=w+l+x;return gp?(w+(sp.xw||0)*x)/gp:null}
 function golfVal(pos,i){const s=String(pos??'').trim().toUpperCase();if(!s)return null;
   if(/^(MC|CUT)$/.test(s))return .25;if(/^(WD|DQ|DNS)$/.test(s))return 0;
-  const n=parseInt(s.replace(/\D/g,''),10);if(!n)return null;const N=Number(S.cfg.field?.[i])||156;
+  const n=parseInt(s.replace(/\D/g,''),10);if(!n)return null;const N=Number(S.meta.golf?.field?.[i])||Number(S.cfg.field?.[i])||156;
   return Math.max(0,Math.min(1,(N-n)/(N-1)))}
 function teamScore(sp,team){
   const r=S.results[rid(sp.id,team)];
@@ -272,6 +291,7 @@ function render(){
   else if(ready)sl.textContent='Waiting for the first automatic score update';
   if(!ready)return;
   $('#view').innerHTML=({standings:viewStandings,draft:viewDraft,scores:viewScores,league:viewLeague}[tab])();
+  tick();
 }
 function viewStandings(){
   if(!S.members.length)return `<div class="notice">No one is in the Gauntlet yet. Add everyone on the League tab, then run the draft.</div>`;
@@ -295,15 +315,17 @@ function breakdown(r,cols){
   return `<div class="scroll"><table><tr><th class="l">Sport</th><th class="l">Pick</th><th class="l">Record</th><th>Season + bonus</th><th>Pts</th></tr>${rows.join('')||'<tr><td class="l muted" colspan="5">No picks yet</td></tr>'}</table></div>`;
 }
 function viewDraft(){
-  const d=D(),ro=canWrite?'':' disabled';
+  const d=D(),ro=isCommish?'':' disabled';
   if(d.status!=='live'&&!S.picks.length){
     const order=draftOrder(),sl=mainSlots(),per=slotsTotal(sl),tooMany=S.members.length>MAX_PEOPLE;
     return `<section class="panel"><h2>Draft setup</h2>
      <p class="muted">Snake draft. On your turn, take any team or player from any sport you still need. Everyone ends with one NFL, NBA, NHL, MLB, Premier League team, one F1 driver, three golfers and two tennis players${activeEvents().length?', plus one pick per special event':''}: ${per} picks each.</p>
      ${S.members.length<2?`<div class="notice">Add at least two people on the League tab first.</div><div><button class="btn ghost" data-go="league">Go to League</button></div>`:`
      <div class="label">Draft order</div>
-     <div class="list">${order.map((id,i)=>`<div><span><span class="num muted">${i+1}.</span> ${esc(mname(id))}</span><span class="row"><button class="btn ghost small" data-move="${i}:-1" aria-label="Move up"${i===0||!canWrite?' disabled':''}>↑</button><button class="btn ghost small" data-move="${i}:1" aria-label="Move down"${i===order.length-1||!canWrite?' disabled':''}>↓</button></span></div>`).join('')}</div>
-     <div class="row"><button class="btn ghost" data-act="shuffle"${ro}>Shuffle order</button><button class="btn" data-act="start"${tooMany||!canWrite?' disabled':''}>Start the draft</button></div>
+     <div class="list">${order.map((id,i)=>`<div><span><span class="num muted">${i+1}.</span> ${esc(mname(id))}</span><span class="row"><button class="btn ghost small" data-move="${i}:-1" aria-label="Move up"${i===0||!isCommish?' disabled':''}>↑</button><button class="btn ghost small" data-move="${i}:1" aria-label="Move down"${i===order.length-1||!isCommish?' disabled':''}>↓</button></span></div>`).join('')}</div>
+     <label class="field" style="max-width:220px"><span class="label">Pick timer</span><select id="pickSeconds" data-pickseconds${ro}>${[[0,'No timer'],[30,'30 seconds'],[60,'1 minute'],[90,'90 seconds'],[120,'2 minutes'],[180,'3 minutes'],[300,'5 minutes']].map(([v,l])=>`<option value="${v}"${(d.pickSeconds??120)===v?' selected':''}>${l}</option>`).join('')}</select></label>
+     <div class="row"><button class="btn ghost" data-act="shuffle"${ro}>Shuffle order</button><button class="btn" data-act="start"${tooMany||!isCommish?' disabled':''}>Start the draft</button></div>
+     ${isCommish?'':'<p class="small muted">The commissioner sets the order and starts the draft.</p>'}
      ${tooMany?`<p class="small" style="color:var(--bad)">The Premier League has 20 clubs, so the Gauntlet tops out at ${MAX_PEOPLE} people.</p>`:''}
      ${confirmKey==='start'?`<div class="confirm"><span>Start the draft with this order?</span><button class="btn" data-yes="start">Start</button><button class="btn ghost" data-no>Not yet</button></div>`:''}`}
     </section>`;
@@ -318,12 +340,14 @@ function viewDraft(){
     if(def.teams){chooser=`<div class="grid">${teamList(def).map(t=>{const own=tk[slug(t)],r=S.results[rid(def.id,t)];
       return `<button class="team" data-pick="${esc(t)}"${own||!canWrite?' disabled':''}>${esc(t)}<small>${own?esc(mname(own)):r?record(def,r):''}</small></button>`}).join('')}</div>`}
     else{const pool=def.kind==='golf'?GOLFERS:def.kind==='tennis'?TENNIS:COUNTRIES,sugg=pool.filter(x=>!tk[slug(x)]);
-      chooser=`<form class="add" id="freePick"><input id="freeInput" list="freeList" placeholder="${def.kind==='golf'?'Type a golfer':def.kind==='tennis'?'Type a tennis player':'Type a country or team'}" aria-label="Pick" maxlength="60" autocomplete="off"${ro}><datalist id="freeList">${sugg.map(x=>`<option value="${esc(x)}">`).join('')}</datalist><button class="btn"${ro}>Draft</button></form>
+      chooser=`<form class="add" id="freePick"><input id="freeInput" list="freeList" placeholder="${def.kind==='golf'?'Type a golfer':def.kind==='tennis'?'Type a tennis player':'Type a country or team'}" aria-label="Pick" maxlength="60" autocomplete="off"${canWrite?'':' disabled'}><datalist id="freeList">${sugg.map(x=>`<option value="${esc(x)}">`).join('')}</datalist><button class="btn"${canWrite?'':' disabled'}>Draft</button></form>
        ${Object.keys(tk).length?`<p class="small muted">Taken: ${S.picks.filter(p=>p.sport===pickSport).map(p=>esc(p.team)+' ('+esc(mname(p.member))+')').join(', ')}</p>`:''}`}
     const nextUp=[1,2].map(k=>i+k<total?esc(mname(onClock(i+k))):null).filter(Boolean);
-    top=`<div class="clock"><span class="label" style="color:inherit;opacity:.7">On the clock · Pick ${i+1} of ${total} · Round ${Math.floor(i/N)+1}</span>
+    top=`<div class="clock"><div class="clockrow"><div><span class="label" style="color:inherit;opacity:.7">On the clock · Pick ${i+1} of ${total} · Round ${Math.floor(i/N)+1}</span>
       <div class="who">${esc(mine?.name||'?')} ${mine?.uid&&mine.uid===me?'<span class="you">You</span>':''}</div>
       <div class="meta">${nextUp.length?'Then: '+nextUp.join(', '):'Last pick of the draft'}</div></div>
+      ${d.pickSeconds?`<div class="timer" id="timer">${PINT}<div><div class="tleft" id="tLeft">–:––</div><div class="tsub" id="tSub">to pick</div></div></div>`:''}</div>
+      ${d.pickSeconds&&isCommish?`<div class="tctl"><button class="btn ghost small" data-act="${d.paused?'resume':'pause'}">${d.paused?'Resume clock':'Pause clock'}</button><button class="btn ghost small" data-act="resetClock">Restart clock</button></div>`:''}</div>
      <section class="panel"><div class="label">Still needs</div>
       <div class="chips">${Object.keys(d.slots).map(id=>`<button class="chip" data-psport="${id}" aria-pressed="${id===pickSport}"${nd[id]>0?'':' disabled'}>${esc(defOf(id).short)}${d.slots[id]>1&&nd[id]>0?` ×${nd[id]}`:''}</button>`).join('')}</div>
       ${pending?`<div class="confirm"><span>Draft <strong>${esc(pending.team)}</strong> (${esc(defOf(pending.sport).short)}) for ${esc(mine?.name)}?</span><button class="btn" data-act="confirmPick">Draft</button><button class="btn ghost" data-act="cancelPick">Cancel</button></div>`:''}
@@ -339,7 +363,7 @@ function viewDraft(){
   }
   const cols=columns().filter(c=>S.picks.some(p=>p.sport===c.id)||(d.slots||{})[c.id]);
   const last=picks.at(-1);
-  const board=`<section class="panel"><div class="cardhead"><h3>Rosters</h3>${picks.length&&canWrite?`<button class="btn ghost small" data-act="undo">Undo last pick</button>`:''}</div>
+  const board=`<section class="panel"><div class="cardhead"><h3>Rosters</h3>${picks.length&&isCommish?`<button class="btn ghost small" data-act="undo">Undo last pick</button>`:''}</div>
     ${confirmKey==='undo'&&last?`<div class="confirm"><span>Undo ${esc(last.team)} (${esc(mname(last.member))})?</span><button class="btn danger" data-yes="undo">Undo pick</button><button class="btn ghost" data-no>Keep it</button></div>`:''}
     <div class="scroll"><table><tr><th class="l">Name</th>${cols.map(c=>`<th class="l">${esc(c.short)}</th>`).join('')}</tr>
     ${(d.order?.length?d.order:S.members.map(m=>m.id)).map(id=>`<tr><td class="l">${esc(mname(id))}</td>${cols.map(c=>`<td class="l">${S.picks.filter(p=>p.member===id&&p.sport===c.id).map(p=>esc(p.team)).join('<br>')||'<span class="muted">–</span>'}</td>`).join('')}</tr>`).join('')}</table></div>
@@ -348,7 +372,7 @@ function viewDraft(){
   return top+board;
 }
 function viewScores(){
-  const cols=columns(),ro=canWrite?'':' disabled';
+  const cols=columns(),ro=isCommish?'':' disabled';
   if(!cols.some(c=>c.id===scoreSport))scoreSport='nfl';
   const def=defOf(scoreSport),picks=S.picks.filter(p=>p.sport===scoreSport);
   const chips=`<div class="chips">${cols.map(c=>`<button class="chip" data-ssport="${c.id}" aria-pressed="${c.id===scoreSport}">${esc(c.short)}</button>`).join('')}</div>`;
@@ -369,25 +393,25 @@ function viewScores(){
      <div class="row">${def.kind==='event'?'':def.kind==='f1'?fld('pos','Position')+fld('pts','Points'):fld('w','Wins')+fld('l','Losses')+(def.x?fld('x',def.xName):'')+(def.kind==='table'?fld('pos','Position'):'')}
       ${def.kind==='team'||def.kind==='event'?`<label class="field grow"><span class="label">${def.kind==='event'?'Result':'Postseason'}</span><select id="r-${slug(p.team)}-stage" data-res="${esc(p.team)}" data-k="stage"${ro}>${def.ladder.map((lab,i)=>lab?`<option value="${i}"${(r.stage|0)===i?' selected':''}>${esc(lab)} (+${f1(ladder(i)*(def.kind==='event'?evWeight(def.id):1))})</option>`:'').join('')}</select></label>`:''}</div>
      ${def.kind==='event'?'':`<div class="small muted">${sc.season?`${def.kind==='f1'?'Ahead of '+Math.round(sc.season/BASE*((Number(S.meta.f1?.teams)||22)-1))+' drivers':(sc.pct??0).toFixed(3).replace(/^0/,'')} → ${f1(sc.season)} season pts`:'No results yet'}${sc.post?` · +${f1(sc.post)} postseason`:''}${sc.best?` · +${f1(sc.best)} best record`:''}</div>`}</div>`}).join('');
-  const doneCtl=auto?`<label class="row small" style="align-items:center;gap:8px"><input type="checkbox" id="done-${def.id}" data-done="${def.id}"${isDone(def.id)?' checked':''}${ro}> Regular season is over (locks in ${def.kind==='team'?'the best-record bonus':'final-position bonuses'})</label>`:'';
+  const doneCtl=auto&&isCommish?`<label class="row small" style="align-items:center;gap:8px"><input type="checkbox" id="done-${def.id}" data-done="${def.id}"${isDone(def.id)?' checked':''}${ro}> Regular season is over (locks in ${def.kind==='team'?'the best-record bonus':'final-position bonuses'})</label>`:'';
   return `${chips}<section class="panel"><div class="cardhead"><h2>${esc(def.name)}</h2>${auto?`<span class="tag ${isDone(def.id)?'done':'live'}">${isDone(def.id)?'Season over':'Auto-updating'}</span>`:def.when?`<span class="small muted">${esc(def.when)}</span>`:''}</div>
-   <p class="small muted">${auto?'Records update every hour from live standings. '+(def.kind==='team'?'Set the postseason result as each round finishes.':'Final-position bonuses apply once you mark the season over.'):def.kind==='event'?'Set each country’s result as the event plays out.':'Enter results after each event. It takes a minute, four times a year.'}</p>
+   <p class="small muted">${def.kind==='event'?'The commissioner sets each country’s result as the event plays out.':'Updates automatically every hour'+(def.kind==='team'?', including playoff rounds':def.kind==='golf'?' once each major finishes':def.kind==='tennis'?' as each Slam plays out':'')+'.'}${isCommish?' As commissioner you can correct anything here; a corrected result stays put until you change it again.':''}</p>
    ${doneCtl}${body}</section>`;
 }
 function viewLeague(){
-  const ro=canWrite?'':' disabled',lock=S.picks.length>0;
+  const ro=isCommish?'':' disabled',lock=S.picks.length>0;
   const members=`<section class="panel"><h2>The field</h2>
    ${S.members.length?`<div class="list">${S.members.map(m=>`<div><span>${esc(m.name)} ${m.uid&&m.uid===me?'<span class="you">You</span>':''}</span><span class="row">
-     ${!m.uid&&!S.members.some(x=>x.uid===me)?`<button class="btn ghost small" data-claim="${m.id}"${ro}>This is me</button>`:''}
-     ${m.uid===me?`<button class="btn ghost small" data-unclaim="${m.id}"${ro}>Not me</button>`:''}
-     ${!lock&&canWrite?`<button class="btn ghost small" data-del="${m.id}">Remove</button>`:''}</span></div>`).join('')}</div>`:'<p class="muted">No one yet. Add the first person below.</p>'}
+     ${!m.uid&&!S.members.some(x=>x.uid===me)?`<button class="btn ghost small" data-claim="${m.id}"${canWrite?'':' disabled'}>This is me</button>`:''}
+     ${m.uid===me?`<button class="btn ghost small" data-unclaim="${m.id}"${canWrite?'':' disabled'}>Not me</button>`:''}
+     ${!lock&&isCommish?`<button class="btn ghost small" data-del="${m.id}">Remove</button>`:''}</span></div>`).join('')}</div>`:'<p class="muted">No one yet. Add the first person below.</p>'}
    ${confirmKey?.startsWith('del:')?`<div class="confirm"><span>Remove ${esc(mname(confirmKey.slice(4)))}?</span><button class="btn danger" data-yes="${confirmKey}">Remove</button><button class="btn ghost" data-no>Keep</button></div>`:''}
-   ${lock?'<p class="small muted">The draft has started, so the field is locked.</p>':`<form class="add" id="addMember"><input id="newMember" placeholder="Name" aria-label="Name" maxlength="40"${ro}><button class="btn"${ro}>Add</button></form>`}
+   ${lock?'<p class="small muted">The draft has started, so the field is locked.</p>':!isCommish?'<p class="small muted">The commissioner adds people to the league.</p>':`<form class="add" id="addMember"><input id="newMember" placeholder="Name" aria-label="Name" maxlength="40"${ro}><button class="btn"${ro}>Add</button></form>`}
    <p class="small muted">Tap “This is me” on your own name, on each phone or computer you use, so the draft shows when you’re up.</p></section>`;
   const evs=eventList().map(e=>{const on=!!S.cfg.events?.[e.id]?.active,drafted=S.picks.some(p=>p.sport===e.id);
     return `<div class="ev"><span><strong>${esc(e.name)}</strong><br><span class="small muted">${esc(e.when)}</span></span><span class="row">
      ${on?`<label class="field"><span class="label">Weight</span><select id="evw-${e.id}" data-evw="${e.id}"${ro}>${[0.5,1,1.5,2].map(w=>`<option value="${w}"${evWeight(e.id)===w?' selected':''}>${w}×</option>`).join('')}</select></label>`:''}
-     <button class="btn ${on?'ghost':''} small" data-evtoggle="${e.id}"${drafted||!canWrite?' disabled':''}>${on?'Turn off':'Add to this year'}</button></span></div>`}).join('');
+     <button class="btn ${on?'ghost':''} small" data-evtoggle="${e.id}"${drafted||!isCommish?' disabled':''}>${on?'Turn off':'Add to this year'}</button></span></div>`}).join('');
   const bf=(k,label)=>`<label class="field"><span class="label">${label}</span><input class="n" id="b-${k}" data-bonus="${k}" value="${esc(B(k))}" inputmode="numeric"${ro}></label>`;
   return members+`
   <section class="panel"><h2>Special events</h2><p class="muted small">Turn on the big tournaments that land in your league year. Each person drafts one country or team, scored on the playoff scale (a title is worth ${ladder(5)}). Events added after the main draft get their own mini draft.</p>
@@ -409,8 +433,36 @@ function viewLeague(){
     ${bf('makeIt','Make playoffs')}${bf('perRound','Per round')}${bf('champ','Title')}${bf('best','Best record')}
     ${bf('majorWin','Major win')}${bf('majorRunnerUp','Major 2nd')}${bf('slamWin','Slam title')}${bf('slamFinal','Slam final')}
    </div></section>
-  ${lock&&canWrite?`<section class="panel"><h3>Start over</h3><p class="small muted">Deletes every pick and sends the draft back to setup. Scores stay.</p><div><button class="btn danger" data-act="reset">Clear all picks</button></div>
+  ${commishPanel()}
+  ${lock&&isCommish?`<section class="panel"><h3>Start over</h3><p class="small muted">Deletes every pick and sends the draft back to setup. Scores stay.</p><div><button class="btn danger" data-act="reset">Clear all picks</button></div>
    ${confirmKey==='reset'?`<div class="confirm"><span>Delete all ${S.picks.length} picks? This can’t be undone.</span><button class="btn danger" data-yes="reset">Delete picks</button><button class="btn ghost" data-no>Cancel</button></div>`:''}</section>`:''}`;
+}
+
+/* Pick timer: a pint that drains as the clock runs. */
+const GLASS='M9 6 L71 6 L74 42 L63 134 L17 134 L6 42 Z';
+const PINT=`<svg class="pint" viewBox="0 0 80 140" aria-hidden="true"><defs><clipPath id="pintClip"><path d="${GLASS}"/></clipPath></defs>
+  <path class="glass" d="${GLASS}"/>
+  <g clip-path="url(#pintClip)"><rect id="beer" x="0" y="16" width="80" height="130" fill="#1b100b"/><rect id="foam" x="0" y="6" width="80" height="11" fill="#fbf4e2"/></g>
+  <path d="${GLASS}" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/></svg>`;
+function clockElapsed(d){if(d.paused)return Number(d.pausedElapsed)||0;const t=Date.parse(d.clockStart||d.startedAt||'');return isNaN(t)?0:Math.max(0,(Date.now()-t)/1000)}
+function tick(){
+  const el=document.getElementById('timer'),d=D();if(!el||d.status!=='live'||!d.pickSeconds)return;
+  const total=d.pickSeconds,left=Math.max(0,total-clockElapsed(d)),frac=left/total;
+  const top=16+(1-frac)*(134-16);
+  const beer=document.getElementById('beer'),foam=document.getElementById('foam');
+  beer.setAttribute('y',top.toFixed(1));foam.setAttribute('y',(top-10).toFixed(1));foam.setAttribute('height',left>0?'11':'0');
+  const m=Math.floor(Math.ceil(left)/60),sec=Math.ceil(left)%60;
+  document.getElementById('tLeft').textContent=left>0?`${m}:${String(sec).padStart(2,'0')}`:'0:00';
+  document.getElementById('tSub').textContent=d.paused?'Paused':left>0?'to pick':'Time’s up';
+  el.classList.toggle('low',left<=Math.min(10,total*.2));
+}
+setInterval(tick,250);
+
+function commishPanel(){
+  return `<section class="panel"><h3>Commissioner</h3>${isCommish
+    ?`<p class="small muted">Signed in as ${esc(email)}. You can run the draft, change settings and correct scores.</p><div><button class="btn ghost small" data-act="commishOut">Sign out</button></div>`
+    :email?`<p class="small muted">${esc(email)} isn’t the commissioner account.</p><div><button class="btn ghost small" data-act="commishOut">Sign out</button></div>`
+    :`<p class="small muted">Scores and settings are locked. Only the commissioner can change them.</p><div><button class="btn ghost small" data-act="commishIn">Commissioner sign in</button></div>`}</section>`;
 }
 
 /* ================= Writes ================= */
@@ -430,7 +482,8 @@ async function makePick(){
   try{const ex=await ref.get();if(ex.exists){toast('Someone just made that pick. The board has refreshed.');render();return}
     const doc={n,member:mid,sport:p.sport,team:p.team,at:new Date().toISOString()};
     S.picks.push(doc);render();await ref.set(doc);
-    if(i+1>=d.order.length*slotsTotal(d.slots))await setDraft({...d,status:'done'});
+    const finished=i+1>=d.order.length*slotsTotal(d.slots);
+    await setDraft({...D(),status:finished?'done':'live',clockStart:doc.at,paused:false,pausedElapsed:0});
   }catch(e){fail(e)}
 }
 
@@ -444,29 +497,37 @@ $('#view').addEventListener('click',async e=>{
   if(ds.psport){pickSport=ds.psport;pending=null;render();return}
   if(ds.pick){pending={sport:pickSport,team:ds.pick};render();return}
   if(ds.no!==undefined){confirmKey=null;render();return}
+  if(ds.act==='commishIn'){try{await AUTH.signIn();toast(isCommish?'Signed in as commissioner.':'That account isn’t the commissioner.')}catch(err){if(err?.code!=='auth/popup-closed-by-user')toast(err?.code==='auth/unauthorized-domain'?'Add this site under Firebase → Authentication → Settings → Authorized domains.':'Sign-in didn’t work. Try again.')}render();return}
+  if(ds.act==='commishOut'){await AUTH.signOut();return}
   if(!canWrite)return;
-  if(ds.move){const [i,dir]=ds.move.split(':').map(Number);const o=draftOrder();[o[i],o[i+dir]]=[o[i+dir],o[i]];return setDraft({status:'setup',order:o})}
+  if(ds.claim||ds.unclaim){/* anyone can claim their own name */}
+  else if(!ds.pick&&ds.act!=='confirmPick'&&ds.act!=='cancelPick'&&!ds.psport&&!isCommish)return;
+  if(ds.move){const [i,dir]=ds.move.split(':').map(Number);const o=draftOrder();[o[i],o[i+dir]]=[o[i+dir],o[i]];return setDraft({...D(),status:'setup',order:o})}
   if(ds.claim){const m=S.members.find(x=>x.id===ds.claim);m.uid=me;render();try{await db.doc('members/'+m.id).set({name:m.name,order:m.order,uid:me})}catch(err){fail(err)}return}
   if(ds.unclaim){const m=S.members.find(x=>x.id===ds.unclaim);delete m.uid;render();try{await db.doc('members/'+m.id).set({name:m.name,order:m.order})}catch(err){fail(err)}return}
   if(ds.del){confirmKey='del:'+ds.del;render();return}
   if(ds.evdraft){confirmKey='ev:'+ds.evdraft;render();return}
   if(ds.evtoggle){const id=ds.evtoggle,cur=S.cfg.events?.[id];S.cfg.events={...S.cfg.events,[id]:{active:!cur?.active,weight:cur?.weight||1}};saveCfg();render();return}
   if(ds.yes){const k=ds.yes;confirmKey=null;
-    if(k==='start')return setDraft({status:'live',order:draftOrder(),slots:mainSlots(),base:nextN(),startedAt:new Date().toISOString()});
-    if(k==='undo'){const last=draftPicks().at(-1);if(!last)return;S.picks=S.picks.filter(p=>p!==last);if(D().status==='done')S.draft={...D(),status:'live'};render();
+    if(k==='start'){const now=new Date().toISOString();return setDraft({status:'live',order:draftOrder(),slots:mainSlots(),base:nextN(),startedAt:now,clockStart:now,pickSeconds:D().pickSeconds??120,paused:false})}
+    if(k==='undo'){const last=draftPicks().at(-1);if(!last)return;S.picks=S.picks.filter(p=>p!==last);S.draft={...D(),status:'live',clockStart:new Date().toISOString(),paused:false,pausedElapsed:0};render();
       try{await db.doc('picks/'+pid(last.n)).delete();await db.doc('draft/main').set(S.draft)}catch(err){fail(err)}return}
     if(k.startsWith('del:')){const id=k.slice(4);S.members=S.members.filter(m=>m.id!==id);render();try{await db.doc('members/'+id).delete()}catch(err){fail(err)}return}
-    if(k.startsWith('ev:')){const id=k.slice(3);return setDraft({status:'live',order:standings().map(r=>r.m.id).reverse(),slots:{[id]:1},base:nextN(),startedAt:new Date().toISOString()})}
+    if(k.startsWith('ev:')){const id=k.slice(3),now=new Date().toISOString();return setDraft({status:'live',order:standings().map(r=>r.m.id).reverse(),slots:{[id]:1},base:nextN(),startedAt:now,clockStart:now,pickSeconds:D().pickSeconds??120,paused:false})}
     if(k==='reset'){const all=[...S.picks];S.picks=[];render();try{for(const p of all)await db.doc('picks/'+pid(p.n)).delete();await db.doc('draft/main').set({status:'setup',order:draftOrder()});toast('All picks cleared.')}catch(err){fail(err)}return}
     return}
-  if(ds.act==='shuffle'){const o=draftOrder();for(let i=o.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[o[i],o[j]]=[o[j],o[i]]}return setDraft({status:'setup',order:o})}
+  if(ds.act==='shuffle'){const o=draftOrder();for(let i=o.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[o[i],o[j]]=[o[j],o[i]]}return setDraft({...D(),status:'setup',order:o})}
   if(ds.act==='start'){confirmKey='start';render();return}
+  if(ds.act==='pause'){const d=D();return setDraft({...d,paused:true,pausedElapsed:clockElapsed(d)})}
+  if(ds.act==='resume'){const d=D();return setDraft({...d,paused:false,clockStart:new Date(Date.now()-clockElapsed(d)*1000).toISOString()})}
+  if(ds.act==='resetClock')return setDraft({...D(),paused:false,pausedElapsed:0,clockStart:new Date().toISOString()});
   if(ds.act==='undo'){confirmKey='undo';render();return}
   if(ds.act==='reset'){confirmKey='reset';render();return}
   if(ds.act==='cancelPick'){pending=null;render();return}
   if(ds.act==='confirmPick'){makePick();return}
 });
 $('#view').addEventListener('submit',async e=>{e.preventDefault();if(!canWrite)return;const f=e.target;
+  if(f.id!=='freePick'&&!isCommish)return;
   if(f.id==='freePick'){const v=$('#freeInput').value.trim();if(!v)return;const def=defOf(pickSport);
     const pool=def.kind==='golf'?GOLFERS:def.kind==='tennis'?TENNIS:COUNTRIES;pending={sport:pickSport,team:pool.find(x=>slug(x)===slug(v))||v};render();return}
   if(f.id==='addMember'){const name=$('#newMember').value.trim();if(!name)return;
@@ -477,7 +538,8 @@ $('#view').addEventListener('submit',async e=>{e.preventDefault();if(!canWrite)r
     S.cfg.customEvents=[...(S.cfg.customEvents||[]),{id,name}];S.cfg.events={...S.cfg.events,[id]:{active:true,weight:1}};saveCfg();render()}
 });
 function saveResult(sport,team,mut){const id=rid(sport,team);const r={sport,team,...(S.results[id]||{})};mut(r);r.manual=true;S.results[id]=r;queue(id,'results/'+id,()=>S.results[id])}
-function onField(e){const t=e.target;if(!canWrite)return;
+function onField(e){const t=e.target;if(!isCommish)return;
+  if(t.dataset.pickseconds!==undefined){setDraft({...D(),order:draftOrder(),status:D().status||'setup',pickSeconds:Number(t.value)});return}
   if(t.id==='cfgSeason'){S.cfg.season=t.value;$('#seasonLabel').textContent='League year '+t.value;saveCfg();return}
   if(t.dataset.bonus){S.cfg.bonus={...DEF_BONUS,...S.cfg.bonus,[t.dataset.bonus]:Number(t.value)||0};saveCfg();return}
   if(t.dataset.done){S.cfg.done={...S.cfg.done,[t.dataset.done]:t.checked};saveCfg();render();return}

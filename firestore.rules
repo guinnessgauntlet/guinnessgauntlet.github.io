@@ -1,19 +1,33 @@
 rules_version = '2';
 
 // Guinness Gauntlet database rules.
-// Anyone who opens the site is signed in anonymously and can read everything.
-// The league's own data (people, picks, draft, settings, results) can be changed from the site.
-// Score-feed bookkeeping (meta, sync) can only be written by the GitHub updater,
-// which uses a service account and bypasses these rules.
+// Everyone who opens the site is signed in anonymously: they can view the league,
+// make draft picks and tap "This is me" on their name.
+// Scores and settings can only be changed by the commissioner's Google account.
+// The hourly GitHub updater uses a service account and bypasses these rules.
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function commissioner() {
+      return signedIn()
+        && request.auth.token.email == 'PASTE_COMMISSIONER_EMAIL'
+        && request.auth.token.email_verified == true;
+    }
+    function smallDoc() { return request.resource.data.size() < 60; }
+
     match /{collection}/{docId} {
-      allow read: if request.auth != null;
-      allow create, update: if request.auth != null
-        && collection in ['members', 'picks', 'draft', 'config', 'results']
-        && request.resource.data.size() < 60;
-      allow delete: if request.auth != null
-        && collection in ['members', 'picks'];
+      allow read: if signedIn();
+
+      // Draft: anyone in the league can pick; the commissioner can do everything.
+      allow create, update: if smallDoc() && (
+        commissioner()
+        || (signedIn() && collection in ['members', 'picks', 'draft'])
+      );
+      allow delete: if commissioner();
+
+      // results, config: commissioner only (covered by commissioner() above).
+      // meta, sync: written only by the updater.
     }
   }
 }
