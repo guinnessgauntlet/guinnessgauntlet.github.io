@@ -1,0 +1,9 @@
+{
+  "_help": "Which season each league counts this league year. ESPN numbers NBA/NHL seasons by the year they END (2026-27 = 2027) and Premier League seasons by the year they START (2026-27 = 2026). Update these once a year.",
+  "nfl": 2026,
+  "nba": 2027,
+  "nhl": 2027,
+  "mlb": 2027,
+  "epl": 2026,
+  "f1": 2027
+}

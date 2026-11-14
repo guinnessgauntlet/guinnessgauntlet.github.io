@@ -1,0 +1,12 @@
+{
+  "name": "guinness-gauntlet-updater",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "update": "node update.mjs",
+    "test": "node update.mjs --dry-run --from-fixtures"
+  },
+  "dependencies": {
+    "firebase-admin": "12.7.0"
+  }
+}

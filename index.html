@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Guinness Gauntlet</title>
+<meta name="description" content="Our multi-sport league: one draft, every season, one champion.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#f0e6cf">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Gauntlet">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: a poured pint. Cream "head" band on top, stout-dark body, sticky tab bar, one column of panels. */
+:root{
+  color-scheme:dark;
+  --bg:#14110f; --panel:#1d1916; --panel2:#27211c; --cream:#f0e6cf; --ink:#14110f;
+  --muted:#a89d89; --rule:#3a322b; --amber:#d9a03f; --good:#86c493; --bad:#e58268;
+  --f-display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--cream);font-family:var(--f-body);font-size:15px;line-height:1.45}
+.in{max-width:840px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.head{background:var(--cream);color:var(--ink);padding-top:env(safe-area-inset-top,0px)}
+.head .in{padding-block:22px 18px;display:flex;flex-direction:column;gap:4px}
+.head h1{font-family:var(--f-display);font-weight:900;font-size:58px;line-height:.88;letter-spacing:.01em;text-transform:uppercase;margin:0;text-wrap:balance}
+.head .sub{font-size:14px;font-weight:500;display:flex;flex-wrap:wrap;gap:4px 12px}
+.head .sync{font-size:13px;opacity:.75}
+nav{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--rule)}
+nav .in{display:flex;gap:2px;overflow-x:auto}
+nav button{font-family:var(--f-display);font-weight:700;font-size:21px;letter-spacing:.04em;text-transform:uppercase;background:none;border:0;border-bottom:3px solid transparent;color:var(--muted);padding:10px 12px 7px;cursor:pointer;white-space:nowrap}
+nav button[aria-selected="true"]{color:var(--cream);border-bottom-color:var(--amber)}
+main.in{padding-block:20px calc(56px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:16px}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+h2{font-family:var(--f-display);font-weight:900;font-size:28px;text-transform:uppercase;letter-spacing:.02em;margin:0;line-height:1}
+h3{font-family:var(--f-display);font-weight:700;font-size:20px;text-transform:uppercase;letter-spacing:.03em;margin:0}
+p{margin:0;max-width:65ch}
+.label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.muted{color:var(--muted)} .small{font-size:13px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto;min-width:0}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--rule);white-space:nowrap}
+th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.l{text-align:left}
+tr.lead td{color:var(--amber)}
+tr.click{cursor:pointer} tr.click:hover td{background:var(--panel2)}
+td.total{font-weight:600;font-size:16px}
+.detail>td{background:var(--panel2);white-space:normal;text-align:left}
+.detail table td{background:transparent}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:600 14px var(--f-body);border:1px solid var(--rule);background:var(--panel2);color:var(--cream);border-radius:999px;padding:6px 13px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--cream);color:var(--ink);border-color:var(--cream)}
+.chip:disabled{opacity:.4;cursor:default;text-decoration:line-through}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+input,select{font:inherit;color:var(--cream);background:var(--panel2);border:1px solid var(--rule);border-radius:6px;padding:7px 9px;min-width:0}
+input.n{width:4.6em;font-family:var(--f-mono);text-align:center}
+.grow{flex:1 1 180px}
+.btn{font:700 14px var(--f-body);background:var(--amber);color:var(--ink);border:0;border-radius:6px;padding:9px 15px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--cream);border:1px solid var(--rule)}
+.btn.small{padding:5px 10px;font-size:13px}
+.btn.danger{background:var(--bad)}
+.btn:disabled{opacity:.45;cursor:default}
+.notice{border:1px dashed var(--rule);border-radius:10px;padding:14px;color:var(--muted)}
+.clock{background:var(--cream);color:var(--ink);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:6px}
+.clock .who{font-family:var(--f-display);font-weight:900;font-size:40px;line-height:.95;text-transform:uppercase}
+.clock .meta{font-size:14px;font-weight:500}
+.you{display:inline-block;background:var(--amber);color:var(--ink);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;border-radius:999px;padding:2px 8px;vertical-align:middle}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.team{font:500 14px var(--f-body);text-align:left;background:var(--panel2);color:var(--cream);border:1px solid var(--rule);border-radius:6px;padding:9px 10px;cursor:pointer}
+.team:hover:not(:disabled){border-color:var(--amber)}
+.team:disabled{opacity:.38;cursor:default}
+.team small{display:block;font-size:11px;color:var(--muted);font-family:var(--f-mono)}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border:1px solid var(--amber);border-radius:8px;padding:12px}
+.list{display:flex;flex-direction:column}
+.list>div{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--rule);flex-wrap:wrap}
+.list>div:last-child{border-bottom:0}
+.add{display:flex;gap:8px;flex-wrap:wrap}.add input{flex:1 1 160px}
+.card{border-top:1px solid var(--rule);padding-top:12px;display:flex;flex-direction:column;gap:8px}
+.card:first-child{border-top:0;padding-top:0}
+.cardhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.pts{font-family:var(--f-mono);font-size:18px}
+.quad{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.quad input,.quad select{width:100%;text-align:center;font-family:var(--f-mono);padding:6px 2px}
+.rules dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px 16px;margin:0}
+.rules dt{font-weight:600}.rules dd{margin:0;color:var(--muted)}
+.ev{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--rule)}
+.ev:last-child{border-bottom:0}
+.tag{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border:1px solid currentColor;border-radius:999px;padding:1px 7px}
+.tag.done{color:var(--amber)} .tag.live{color:var(--good)}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--cream);color:var(--ink);font-weight:600;padding:9px 14px;border-radius:8px;font-size:14px;z-index:20;max-width:calc(100% - 32px)}
+[hidden]{display:none!important}
+@media (max-width:520px){.head h1{font-size:44px}.clock .who{font-size:32px}nav button{font-size:18px;padding:10px 9px 7px}.rules dl{grid-template-columns:1fr}.rules dd{margin-bottom:6px}}
+@media (prefers-reduced-motion:no-preference){.chip,.team,nav button{transition:background .15s,border-color .15s,color .15s}}
+</style>
+</head>
+<body>
+<header class="head"><div class="in">
+  <h1>Guinness Gauntlet</h1>
+  <div class="sub"><span id="seasonLabel">League year 2026–27</span><span>Every sport scaled to MLB’s 162 games</span></div>
+  <div class="sync" id="syncLine">Connecting…</div>
+</div></header>
+<nav><div class="in" role="tablist">
+  <button id="tab-standings" role="tab" data-tab="standings" aria-selected="true">Standings</button>
+  <button id="tab-draft" role="tab" data-tab="draft" aria-selected="false">Draft</button>
+  <button id="tab-scores" role="tab" data-tab="scores" aria-selected="false">Scores</button>
+  <button id="tab-league" role="tab" data-tab="league" aria-selected="false">League</button>
+</div></nav>
+<main class="in" id="view"><div class="notice">Loading the league…</div></main>
+<div id="toast" hidden></div>
+
+<script src="config.js"></script>
+<script type="module">
+/* ================= Firebase adapter ================= */
+const FB='https://www.gstatic.com/firebasejs/10.12.2/';
+let db=null,me=null;
+async function connect(){
+  const cfg=window.GG_FIREBASE;
+  if(!cfg||!cfg.apiKey||cfg.apiKey.startsWith('PASTE'))throw Object.assign(new Error('config'),{code:'no-config'});
+  const [{initializeApp},F,A]=await Promise.all([import(FB+'firebase-app.js'),import(FB+'firebase-firestore.js'),import(FB+'firebase-auth.js')]);
+  const app=initializeApp(cfg),fs=F.getFirestore(app),auth=A.getAuth(app);
+  const cred=await A.signInAnonymously(auth);me=cred.user.uid;
+  const wrapSnapDoc=s=>({id:s.id,exists:s.exists(),data:()=>s.data(),metadata:s.metadata});
+  const wrapD=r=>({id:r.id,get:async()=>wrapSnapDoc(await F.getDoc(r)),set:d=>F.setDoc(r,d),delete:()=>F.deleteDoc(r),
+    onSnapshot:(n,e)=>F.onSnapshot(r,s=>n(wrapSnapDoc(s)),e)});
+  const wrapQ=q=>({onSnapshot:(n,e)=>F.onSnapshot(q,s=>n({docs:s.docs.map(wrapSnapDoc),metadata:s.metadata}),e)});
+  return {
+    doc:p=>wrapD(F.doc(fs,p)),
+    collection:p=>{const ref=F.collection(fs,p);return {orderBy:f=>wrapQ(F.query(ref,F.orderBy(f))),onSnapshot:(n,e)=>wrapQ(ref).onSnapshot(n,e),doc:id=>wrapD(id?F.doc(ref,id):F.doc(ref))}}
+  };
+}
+
+/* ================= Sports & rules ================= */
+const BASE=162;
+const T=s=>s.split('|');
+const PLAYOFF=k=>k; // labels are per sport; index = stage (0 missed … 5 champion)
+const SPORTS=[
+ {id:'nfl',name:'NFL',short:'NFL',kind:'team',x:'T',xName:'Ties',xw:.5,teams:T('Arizona Cardinals|Atlanta Falcons|Baltimore Ravens|Buffalo Bills|Carolina Panthers|Chicago Bears|Cincinnati Bengals|Cleveland Browns|Dallas Cowboys|Denver Broncos|Detroit Lions|Green Bay Packers|Houston Texans|Indianapolis Colts|Jacksonville Jaguars|Kansas City Chiefs|Las Vegas Raiders|Los Angeles Chargers|Los Angeles Rams|Miami Dolphins|Minnesota Vikings|New England Patriots|New Orleans Saints|New York Giants|New York Jets|Philadelphia Eagles|Pittsburgh Steelers|San Francisco 49ers|Seattle Seahawks|Tampa Bay Buccaneers|Tennessee Titans|Washington Commanders'),
+  ladder:['Missed playoffs','Lost Wild Card round','Lost Divisional round','Lost Conference Championship','Lost Super Bowl','Won Super Bowl']},
+ {id:'nba',name:'NBA',short:'NBA',kind:'team',teams:T('Atlanta Hawks|Boston Celtics|Brooklyn Nets|Charlotte Hornets|Chicago Bulls|Cleveland Cavaliers|Dallas Mavericks|Denver Nuggets|Detroit Pistons|Golden State Warriors|Houston Rockets|Indiana Pacers|LA Clippers|Los Angeles Lakers|Memphis Grizzlies|Miami Heat|Milwaukee Bucks|Minnesota Timberwolves|New Orleans Pelicans|New York Knicks|Oklahoma City Thunder|Orlando Magic|Philadelphia 76ers|Phoenix Suns|Portland Trail Blazers|Sacramento Kings|San Antonio Spurs|Toronto Raptors|Utah Jazz|Washington Wizards'),
+  ladder:['Missed playoffs (incl. play-in)','Lost 1st round','Lost 2nd round','Lost Conference Finals','Lost NBA Finals','Won NBA title']},
+ {id:'nhl',name:'NHL',short:'NHL',kind:'team',x:'OTL',xName:'OT losses',xw:.5,teams:T('Anaheim Ducks|Boston Bruins|Buffalo Sabres|Calgary Flames|Carolina Hurricanes|Chicago Blackhawks|Colorado Avalanche|Columbus Blue Jackets|Dallas Stars|Detroit Red Wings|Edmonton Oilers|Florida Panthers|Los Angeles Kings|Minnesota Wild|Montreal Canadiens|Nashville Predators|New Jersey Devils|New York Islanders|New York Rangers|Ottawa Senators|Philadelphia Flyers|Pittsburgh Penguins|San Jose Sharks|Seattle Kraken|St. Louis Blues|Tampa Bay Lightning|Toronto Maple Leafs|Utah Mammoth|Vancouver Canucks|Vegas Golden Knights|Washington Capitals|Winnipeg Jets'),
+  ladder:['Missed playoffs','Lost 1st round','Lost 2nd round','Lost Conference Final','Lost Stanley Cup Final','Won Stanley Cup']},
+ {id:'mlb',name:'MLB',short:'MLB',kind:'team',teams:T('Arizona Diamondbacks|Athletics|Atlanta Braves|Baltimore Orioles|Boston Red Sox|Chicago Cubs|Chicago White Sox|Cincinnati Reds|Cleveland Guardians|Colorado Rockies|Detroit Tigers|Houston Astros|Kansas City Royals|Los Angeles Angels|Los Angeles Dodgers|Miami Marlins|Milwaukee Brewers|Minnesota Twins|New York Mets|New York Yankees|Philadelphia Phillies|Pittsburgh Pirates|San Diego Padres|San Francisco Giants|Seattle Mariners|St. Louis Cardinals|Tampa Bay Rays|Texas Rangers|Toronto Blue Jays|Washington Nationals'),
+  ladder:['Missed postseason','Lost Wild Card Series','Lost Division Series','Lost LCS','Lost World Series','Won World Series']},
+ {id:'epl',name:'Premier League',short:'EPL',kind:'table',x:'D',xName:'Draws',xw:1/3,teams:T('AFC Bournemouth|Arsenal|Aston Villa|Brentford|Brighton & Hove Albion|Chelsea|Coventry City|Crystal Palace|Everton|Fulham|Hull City|Ipswich Town|Leeds United|Liverpool|Manchester City|Manchester United|Newcastle United|Nottingham Forest|Sunderland|Tottenham Hotspur'),
+  ladder:['Finished 11th or lower','Finished 7th–10th','Finished 5th–6th','Finished 3rd–4th','Runner-up','Champions']},
+ {id:'f1',name:'Formula 1',short:'F1',kind:'f1',teams:T('Alex Albon|Andrea Kimi Antonelli|Arvid Lindblad|Carlos Sainz|Charles Leclerc|Esteban Ocon|Fernando Alonso|Franco Colapinto|Gabriel Bortoleto|George Russell|Isack Hadjar|Lance Stroll|Lando Norris|Lewis Hamilton|Liam Lawson|Max Verstappen|Nico Hülkenberg|Oliver Bearman|Oscar Piastri|Pierre Gasly|Sergio Pérez|Valtteri Bottas'),
+  ladder:['11th or lower','7th–10th','5th–6th','3rd–4th','2nd','World champion']},
+ {id:'golf',name:'Golf majors',short:'Golf',kind:'golf',count:3,events:['Masters','PGA','U.S. Open','The Open']},
+ {id:'tennis',name:'Grand Slam tennis',short:'Tennis',kind:'tennis',count:2,events:['Aus Open','French','Wimbledon','US Open']}
+];
+const SLAM_RES=[['','—'],['R128','Lost 1st rd'],['R64','Lost 2nd rd'],['R32','Lost 3rd rd'],['R16','Lost 4th rd'],['QF','Lost QF'],['SF','Lost SF'],['F','Runner-up'],['W','Won'],['WD','Withdrew / skipped']];
+const SLAM_WL={R128:[0,1],R64:[1,1],R32:[2,1],R16:[3,1],QF:[4,1],SF:[5,1],F:[6,1],W:[7,0],WD:[0,1]};
+const KO=['Out in group stage','Lost Round of 16','Lost quarterfinal','Lost semifinal','Lost final','Champions'];
+const MEDAL=['Outside top 20 in medals','11th–20th in medals','6th–10th in medals','4th–5th in medals','2nd–3rd in medals','Top of the medal table'];
+const EVENTS=[
+ {id:'wwc27',name:"Women's World Cup 2027",short:'WWC',when:'Jun–Jul 2027 · Brazil',ladder:KO},
+ {id:'rwc27',name:'Rugby World Cup 2027',short:'RWC',when:'Oct–Nov 2027 · Australia',ladder:KO},
+ {id:'cwc27',name:'Cricket World Cup 2027',short:'CWC',when:'Oct–Nov 2027 · southern Africa',ladder:['Out in group stage','Out in Super Six',null,'Lost semifinal','Lost final','Champions']},
+ {id:'mm27',name:'March Madness 2027',short:'March',when:'Mar–Apr 2027 · NCAA men’s tournament',ladder:['Lost in first round or First Four','Lost Round of 32','Lost Sweet 16','Lost Elite Eight','Lost in Final Four or title game','National champion']},
+ {id:'oly28',name:'Summer Olympics 2028',short:'Olympics',when:'Jul–Aug 2028 · Los Angeles',ladder:MEDAL},
+ {id:'wc30',name:'FIFA World Cup 2030',short:'World Cup',when:'Jun–Jul 2030 · Spain, Portugal, Morocco',ladder:['Out by Round of 32','Lost Round of 16','Lost quarterfinal','Lost semifinal','Lost final','Champions']},
+ {id:'woly30',name:'Winter Olympics 2030',short:'Winter Oly',when:'Feb 2030 · French Alps',ladder:MEDAL}
+];
+const GENERIC=['Out early','Reached the knockouts','Lost quarterfinal','Lost semifinal','Lost final','Won it'];
+const COUNTRIES=T('Argentina|Australia|Austria|Belgium|Brazil|Canada|China|Colombia|Croatia|Denmark|England|Fiji|France|Georgia|Germany|Great Britain|India|Ireland|Italy|Jamaica|Japan|Kenya|Mexico|Morocco|Netherlands|New Zealand|Nigeria|Norway|Pakistan|Portugal|Samoa|Scotland|Senegal|South Africa|South Korea|Spain|Sri Lanka|Sweden|Switzerland|Tonga|United States|Uruguay|Wales|West Indies');
+const GOLFERS=T('Scottie Scheffler|Rory McIlroy|Xander Schauffele|Bryson DeChambeau|Jon Rahm|Ludvig Åberg|Collin Morikawa|Tommy Fleetwood|Justin Thomas|Viktor Hovland|Patrick Cantlay|Hideki Matsuyama|Jordan Spieth|Brooks Koepka|Shane Lowry|Tyrrell Hatton|Russell Henley|Sepp Straka|Keegan Bradley|J.J. Spaun|Robert MacIntyre|Cameron Young|Ben Griffin|Harris English|Justin Rose|Matt Fitzpatrick|Sam Burns|Wyndham Clark|Joaquín Niemann|Tony Finau|Corey Conners|Akshay Bhatia|Min Woo Lee|Jason Day|Adam Scott|Cameron Smith|Patrick Reed|Tom Kim|Aaron Rai|Chris Gotterup|Nicolai Højgaard|Jake Knapp|Maverick McNealy|Si Woo Kim|Daniel Berger|Max Homa');
+const TENNIS=T('Jannik Sinner|Carlos Alcaraz|Novak Djokovic|Alexander Zverev|Taylor Fritz|Jack Draper|Ben Shelton|Lorenzo Musetti|Alex de Minaur|Holger Rune|Daniil Medvedev|Casper Ruud|Tommy Paul|Frances Tiafoe|Andrey Rublev|João Fonseca|Jakub Menšík|Félix Auger-Aliassime|Aryna Sabalenka|Iga Świątek|Coco Gauff|Jessica Pegula|Elena Rybakina|Madison Keys|Jasmine Paolini|Mirra Andreeva|Qinwen Zheng|Amanda Anisimova|Emma Navarro|Elina Svitolina|Karolína Muchová|Naomi Osaka|Belinda Bencic|Victoria Mboko');
+const DEF_BONUS={makeIt:5,perRound:5,champ:10,best:10,majorWin:10,majorRunnerUp:5,slamWin:10,slamFinal:5};
+const DEF_CFG={season:'2026–27',bonus:DEF_BONUS,field:[90,156,156,156],done:{},events:{},customEvents:[]};
+const MAX_PEOPLE=20;
+
+/* ================= State ================= */
+let ready=false,canWrite=false,tab='standings',scoreSport='nfl',pickSport=null,pending=null,openRow=null,confirmKey=null;
+const S={members:[],picks:[],results:{},meta:{},cfg:structuredClone(DEF_CFG),draft:{status:'setup',order:[]},sync:null};
+const dirty={},timers={},inflight={},again={};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const f1=n=>(Math.round(n*10)/10).toFixed(1);
+const slug=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/ø/g,'o').replace(/&/g,'and').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+const rid=(sport,team)=>sport+'__'+slug(team);
+const mname=id=>S.members.find(m=>m.id===id)?.name||'Someone';
+function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,2800)}
+const B=k=>{const v=Number(S.cfg.bonus?.[k]);return Number.isFinite(v)?v:DEF_BONUS[k]};
+const isDone=id=>!!S.cfg.done?.[id];
+
+/* ================= Definitions ================= */
+const eventList=()=>[...EVENTS,...(S.cfg.customEvents||[]).map(c=>({...c,short:c.name.slice(0,10),when:'Custom event',ladder:GENERIC}))];
+const activeEvents=()=>eventList().filter(e=>S.cfg.events?.[e.id]?.active);
+const defOf=id=>SPORTS.find(s=>s.id===id)||{...eventList().find(e=>e.id===id),kind:'event'};
+const evWeight=id=>{const w=Number(S.cfg.events?.[id]?.weight);return w>0?w:1};
+function columns(){const ids=new Set(S.picks.map(p=>p.sport));return [...SPORTS,...eventList().filter(e=>S.cfg.events?.[e.id]?.active||ids.has(e.id)).map(e=>({...e,kind:'event'}))]}
+function teamList(sp){ // prefer names written by the score updater so picks match its records
+  const fromFeed=Object.values(S.results).filter(r=>r.sport===sp.id&&r.feed).map(r=>r.team);
+  return (fromFeed.length>=sp.teams.length*0.8?fromFeed:sp.teams).slice().sort((a,b)=>a.localeCompare(b));
+}
+
+/* ================= Scoring ================= */
+// Postseason ladder: 0 missed · 1 made it · 2 won a round · 3 won two · 4 lost final · 5 champion
+const ladder=st=>st<=0?0:B('makeIt')+B('perRound')*(st-1)+(st>=5?B('champ'):0);
+const posStage=(id,pos)=>{if(!pos)return 0;
+  return pos===1?5:pos===2?4:pos<=4?3:pos<=6?2:pos<=10?1:0};
+function pctOf(sp,r){if(!r)return null;const w=+r.w||0,l=+r.l||0,x=+r.x||0,gp=w+l+x;return gp?(w+(sp.xw||0)*x)/gp:null}
+function golfVal(pos,i){const s=String(pos??'').trim().toUpperCase();if(!s)return null;
+  if(/^(MC|CUT)$/.test(s))return .25;if(/^(WD|DQ|DNS)$/.test(s))return 0;
+  const n=parseInt(s.replace(/\D/g,''),10);if(!n)return null;const N=Number(S.cfg.field?.[i])||156;
+  return Math.max(0,Math.min(1,(N-n)/(N-1)))}
+function teamScore(sp,team){
+  const r=S.results[rid(sp.id,team)];
+  if(sp.kind==='event'){const st=r?.stage|0,post=ladder(st)*evWeight(sp.id);return {season:0,post,best:0,pts:post,stage:st,r}}
+  let season=0,stage=r?.stage|0,pct=null,best=0;
+  if(sp.kind==='f1'){const N=Number(S.meta.f1?.teams)||22,pos=+r?.pos||0;if(pos)season=(N-pos)/(N-1)*BASE;
+    if(isDone('f1')){stage=posStage('f1',pos);if(pos===1)best=B('best')}else stage=0}
+  else{pct=pctOf(sp,r);season=pct==null?0:pct*BASE;
+    if(sp.kind==='table'){if(isDone(sp.id)){stage=posStage(sp.id,+r?.pos||0);if(+r?.pos===1)best=B('best')}else stage=0}
+    else if(isDone(sp.id)&&(S.meta[sp.id]?.best||[]).map(slug).includes(slug(team)))best=B('best')}
+  const post=ladder(stage);return {season,post,best,pts:season+post+best,pct,stage,r};
+}
+function scoreOf(mid,sp){
+  const mine=S.picks.filter(p=>p.member===mid&&p.sport===sp.id);
+  if(sp.kind==='golf'){let vals=[],wins=0,seconds=0;const items=mine.map(p=>{const pos=S.results[rid('golf',p.team)]?.pos||[];
+      pos.forEach((v,i)=>{const g=golfVal(v,i);if(g!=null)vals.push(g);const s=String(v||'').trim().toUpperCase();if(s==='1')wins++;else if(s==='2'||s==='T2')seconds++});return {team:p.team,pos}});
+    const season=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length*BASE:0,post=wins*B('majorWin')+seconds*B('majorRunnerUp');
+    return {season,post,pts:season+post,items,note:`${wins} won · ${seconds} runner-up`}}
+  if(sp.kind==='tennis'){let W=0,L=0,titles=0,finals=0;const items=mine.map(p=>{const res=S.results[rid('tennis',p.team)]?.res||[];
+      res.forEach(c=>{const wl=SLAM_WL[c];if(wl){W+=wl[0];L+=wl[1]}if(c==='W')titles++;if(c==='F')finals++});return {team:p.team,res}});
+    const season=W+L?W/(W+L)*BASE:0,post=titles*B('slamWin')+finals*B('slamFinal');
+    return {season,post,pts:season+post,items,note:`${W}–${L} in Slam matches`}}
+  const items=mine.map(p=>({team:p.team,...teamScore(sp,p.team)}));
+  const pts=items.reduce((a,i)=>a+i.pts,0);
+  return {season:items.reduce((a,i)=>a+i.season,0),post:items.reduce((a,i)=>a+i.post+i.best,0),pts,items};
+}
+function standings(){const cols=columns();
+  return S.members.map(m=>{const by={};let total=0,titles=0;for(const c of cols){by[c.id]=scoreOf(m.id,c);total+=by[c.id].pts;titles+=(by[c.id].items||[]).filter(i=>i.stage===5).length}
+    return {m,by,total,titles}}).sort((a,b)=>b.total-a.total||b.titles-a.titles)}
+function record(sp,r){if(!r)return '—';
+  if(sp.kind==='f1')return r.pos?`P${r.pos} · ${r.pts??0} pts`:'—';
+  const w=+r.w||0,l=+r.l||0,x=+r.x||0;if(!w&&!l&&!x)return '0–0';
+  if(sp.kind==='table')return `${w}–${x}–${l}${r.pos?` · ${ordinal(r.pos)}`:''}`;return x?`${w}–${l}–${x}`:`${w}–${l}`}
+function ordinal(n){const s=['th','st','nd','rd'],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0])}
+
+/* ================= Draft engine ================= */
+const D=()=>S.draft||{status:'setup',order:[]};
+function draftOrder(){const o=(D().order||[]).filter(id=>S.members.some(m=>m.id===id));S.members.forEach(m=>{if(!o.includes(m.id))o.push(m.id)});return o}
+const slotsTotal=sl=>Object.values(sl||{}).reduce((a,b)=>a+b,0);
+function draftPicks(){const b=D().base||0;return S.picks.filter(p=>p.n>=b).sort((a,b)=>a.n-b.n)}
+function onClock(i){const o=D().order||[],N=o.length;if(!N)return null;const r=Math.floor(i/N),k=i%N;return o[r%2===0?k:N-1-k]}
+function need(mid){const sl=D().slots||{},b=D().base||0,out={};for(const id in sl)out[id]=sl[id]-S.picks.filter(p=>p.member===mid&&p.sport===id&&p.n>=b).length;return out}
+function takenMap(sport){const m={};S.picks.filter(p=>p.sport===sport).forEach(p=>m[slug(p.team)]=p.member);return m}
+function mainSlots(){const sl={};SPORTS.forEach(s=>sl[s.id]=s.count||1);activeEvents().forEach(e=>{if(!S.picks.some(p=>p.sport===e.id))sl[e.id]=1});return sl}
+const nextN=()=>S.picks.reduce((a,p)=>Math.max(a,p.n+1),0);
+const pid=n=>'p'+String(n).padStart(4,'0');
+
+/* ================= Views ================= */
+function render(){
+  document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===tab)));
+  $('#seasonLabel').textContent='League year '+(S.cfg.season||'2026–27');
+  const sl=$('#syncLine');
+  if(S.sync?.at){const t=new Date(S.sync.at);sl.textContent='Scores updated '+(isNaN(t)?S.sync.at:t.toLocaleString([], {weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))+(S.sync.note?' · '+S.sync.note:'')}
+  else if(ready)sl.textContent='Waiting for the first automatic score update';
+  if(!ready)return;
+  $('#view').innerHTML=({standings:viewStandings,draft:viewDraft,scores:viewScores,league:viewLeague}[tab])();
+}
+function viewStandings(){
+  if(!S.members.length)return `<div class="notice">No one is in the Gauntlet yet. Add everyone on the League tab, then run the draft.</div>`;
+  if(!S.picks.length)return `<section class="panel"><h2>Standings</h2><p class="muted">Standings appear once the draft starts. Signed up: ${S.members.map(m=>esc(m.name)).join(', ')}.</p><div><button class="btn" data-go="draft">Go to the draft</button></div></section>`;
+  const cols=columns(),rows=standings();let prev=null,rank=0;
+  const body=rows.map((r,i)=>{if(r.total!==prev){rank=i+1;prev=r.total}
+    const isOpen=openRow===r.m.id;
+    return `<tr class="click ${rank===1?'lead':''}" data-open="${r.m.id}" aria-expanded="${isOpen}"><td class="num l">${rank}</td><td class="l">${esc(r.m.name)}${r.m.uid&&r.m.uid===me?' <span class="you">You</span>':''}</td>${cols.map(c=>`<td class="num">${f1(r.by[c.id].pts)}</td>`).join('')}<td class="num total">${f1(r.total)}</td></tr>`
+      +(isOpen?`<tr class="detail"><td colspan="${cols.length+3}">${breakdown(r,cols)}</td></tr>`:'')}).join('');
+  return `<section class="panel"><div class="cardhead"><h2>Standings</h2><span class="small muted">Tap a name for their teams</span></div>
+   <div class="scroll"><table><tr><th class="l">#</th><th class="l">Name</th>${cols.map(c=>`<th title="${esc(c.name)}">${esc(c.short)}</th>`).join('')}<th>Total</th></tr>${body}</table></div>
+   <p class="small muted">Season points are win % × 162, so every sport counts the same no matter how long its season is. Seasons in progress count at their current pace. Playoff, title and best-record bonuses are added as they’re earned.</p></section>`;
+}
+function breakdown(r,cols){
+  const rows=cols.flatMap(c=>{const s=r.by[c.id];
+    if(c.kind==='golf'||c.kind==='tennis'){if(!s.items.length)return [];
+      return s.items.map(it=>`<tr><td class="l">${c.short}</td><td class="l">${esc(it.team)}</td><td class="l num">${(c.kind==='golf'?it.pos:it.res).map(v=>esc(v||'–')).join(' · ')||'–'}</td><td></td><td></td></tr>`)
+        .concat(`<tr><td class="l">${c.short}</td><td class="l muted">${s.note}</td><td></td><td class="num">${f1(s.season)} + ${f1(s.post)}</td><td class="num">${f1(s.pts)}</td></tr>`)}
+    return s.items.map(it=>{const lab=c.ladder[it.stage]||'';
+      return `<tr><td class="l">${esc(c.short)}</td><td class="l">${esc(it.team)}</td><td class="l num">${c.kind==='event'?esc(lab):record(c,it.r)+(it.stage?` · ${esc(lab)}`:'')}${it.best?' · best record':''}</td><td class="num">${c.kind==='event'?'':f1(it.season)+' + '}${f1(it.post+it.best)}</td><td class="num">${f1(it.pts)}</td></tr>`})});
+  return `<div class="scroll"><table><tr><th class="l">Sport</th><th class="l">Pick</th><th class="l">Record</th><th>Season + bonus</th><th>Pts</th></tr>${rows.join('')||'<tr><td class="l muted" colspan="5">No picks yet</td></tr>'}</table></div>`;
+}
+function viewDraft(){
+  const d=D(),ro=canWrite?'':' disabled';
+  if(d.status!=='live'&&!S.picks.length){
+    const order=draftOrder(),sl=mainSlots(),per=slotsTotal(sl),tooMany=S.members.length>MAX_PEOPLE;
+    return `<section class="panel"><h2>Draft setup</h2>
+     <p class="muted">Snake draft. On your turn, take any team or player from any sport you still need. Everyone ends with one NFL, NBA, NHL, MLB, Premier League team, one F1 driver, three golfers and two tennis players${activeEvents().length?', plus one pick per special event':''}: ${per} picks each.</p>
+     ${S.members.length<2?`<div class="notice">Add at least two people on the League tab first.</div><div><button class="btn ghost" data-go="league">Go to League</button></div>`:`
+     <div class="label">Draft order</div>
+     <div class="list">${order.map((id,i)=>`<div><span><span class="num muted">${i+1}.</span> ${esc(mname(id))}</span><span class="row"><button class="btn ghost small" data-move="${i}:-1" aria-label="Move up"${i===0||!canWrite?' disabled':''}>↑</button><button class="btn ghost small" data-move="${i}:1" aria-label="Move down"${i===order.length-1||!canWrite?' disabled':''}>↓</button></span></div>`).join('')}</div>
+     <div class="row"><button class="btn ghost" data-act="shuffle"${ro}>Shuffle order</button><button class="btn" data-act="start"${tooMany||!canWrite?' disabled':''}>Start the draft</button></div>
+     ${tooMany?`<p class="small" style="color:var(--bad)">The Premier League has 20 clubs, so the Gauntlet tops out at ${MAX_PEOPLE} people.</p>`:''}
+     ${confirmKey==='start'?`<div class="confirm"><span>Start the draft with this order?</span><button class="btn" data-yes="start">Start</button><button class="btn ghost" data-no>Not yet</button></div>`:''}`}
+    </section>`;
+  }
+  const picks=draftPicks(),total=(d.order||[]).length*slotsTotal(d.slots),i=picks.length;
+  let top='';
+  if(d.status==='live'&&i<total){
+    const mid=onClock(i),N=d.order.length,nd=need(mid),openSports=Object.keys(nd).filter(k=>nd[k]>0);
+    if(!pickSport||!openSports.includes(pickSport))pickSport=openSports[0];
+    const def=defOf(pickSport),tk=takenMap(pickSport),mine=S.members.find(m=>m.id===mid);
+    let chooser;
+    if(def.teams){chooser=`<div class="grid">${teamList(def).map(t=>{const own=tk[slug(t)],r=S.results[rid(def.id,t)];
+      return `<button class="team" data-pick="${esc(t)}"${own||!canWrite?' disabled':''}>${esc(t)}<small>${own?esc(mname(own)):r?record(def,r):''}</small></button>`}).join('')}</div>`}
+    else{const pool=def.kind==='golf'?GOLFERS:def.kind==='tennis'?TENNIS:COUNTRIES,sugg=pool.filter(x=>!tk[slug(x)]);
+      chooser=`<form class="add" id="freePick"><input id="freeInput" list="freeList" placeholder="${def.kind==='golf'?'Type a golfer':def.kind==='tennis'?'Type a tennis player':'Type a country or team'}" aria-label="Pick" maxlength="60" autocomplete="off"${ro}><datalist id="freeList">${sugg.map(x=>`<option value="${esc(x)}">`).join('')}</datalist><button class="btn"${ro}>Draft</button></form>
+       ${Object.keys(tk).length?`<p class="small muted">Taken: ${S.picks.filter(p=>p.sport===pickSport).map(p=>esc(p.team)+' ('+esc(mname(p.member))+')').join(', ')}</p>`:''}`}
+    const nextUp=[1,2].map(k=>i+k<total?esc(mname(onClock(i+k))):null).filter(Boolean);
+    top=`<div class="clock"><span class="label" style="color:inherit;opacity:.7">On the clock · Pick ${i+1} of ${total} · Round ${Math.floor(i/N)+1}</span>
+      <div class="who">${esc(mine?.name||'?')} ${mine?.uid&&mine.uid===me?'<span class="you">You</span>':''}</div>
+      <div class="meta">${nextUp.length?'Then: '+nextUp.join(', '):'Last pick of the draft'}</div></div>
+     <section class="panel"><div class="label">Still needs</div>
+      <div class="chips">${Object.keys(d.slots).map(id=>`<button class="chip" data-psport="${id}" aria-pressed="${id===pickSport}"${nd[id]>0?'':' disabled'}>${esc(defOf(id).short)}${d.slots[id]>1&&nd[id]>0?` ×${nd[id]}`:''}</button>`).join('')}</div>
+      ${pending?`<div class="confirm"><span>Draft <strong>${esc(pending.team)}</strong> (${esc(defOf(pending.sport).short)}) for ${esc(mine?.name)}?</span><button class="btn" data-act="confirmPick">Draft</button><button class="btn ghost" data-act="cancelPick">Cancel</button></div>`:''}
+      ${chooser}</section>`;
+  }else if(d.status==='live'){top=`<div class="notice">All picks are in. Finishing up…</div>`}
+  else{
+    const undrafted=activeEvents().filter(e=>!S.picks.some(p=>p.sport===e.id));
+    top=`<section class="panel"><h2>Draft complete</h2><p class="muted">Scores update on their own from here. Check the Standings tab.</p>
+      ${undrafted.map(e=>`<div class="ev"><span><strong>${esc(e.name)}</strong> <span class="small muted">${esc(e.when)}</span></span><button class="btn" data-evdraft="${e.id}"${ro}>Run ${esc(e.short)} draft</button></div>`).join('')}
+      ${undrafted.length?'<p class="small muted">Event drafts go in reverse order of the standings, so last place picks first.</p>':''}
+      ${confirmKey?.startsWith('ev:')?`<div class="confirm"><span>Start the ${esc(defOf(confirmKey.slice(3)).name)} draft now?</span><button class="btn" data-yes="${confirmKey}">Start</button><button class="btn ghost" data-no>Cancel</button></div>`:''}
+    </section>`;
+  }
+  const cols=columns().filter(c=>S.picks.some(p=>p.sport===c.id)||(d.slots||{})[c.id]);
+  const last=picks.at(-1);
+  const board=`<section class="panel"><div class="cardhead"><h3>Rosters</h3>${picks.length&&canWrite?`<button class="btn ghost small" data-act="undo">Undo last pick</button>`:''}</div>
+    ${confirmKey==='undo'&&last?`<div class="confirm"><span>Undo ${esc(last.team)} (${esc(mname(last.member))})?</span><button class="btn danger" data-yes="undo">Undo pick</button><button class="btn ghost" data-no>Keep it</button></div>`:''}
+    <div class="scroll"><table><tr><th class="l">Name</th>${cols.map(c=>`<th class="l">${esc(c.short)}</th>`).join('')}</tr>
+    ${(d.order?.length?d.order:S.members.map(m=>m.id)).map(id=>`<tr><td class="l">${esc(mname(id))}</td>${cols.map(c=>`<td class="l">${S.picks.filter(p=>p.member===id&&p.sport===c.id).map(p=>esc(p.team)).join('<br>')||'<span class="muted">–</span>'}</td>`).join('')}</tr>`).join('')}</table></div>
+    ${picks.length?`<div class="label">Latest picks</div><div class="list">${picks.slice(-5).reverse().map(p=>`<div><span><span class="num muted">#${p.n-(d.base||0)+1}</span> ${esc(mname(p.member))}</span><span>${esc(p.team)} <span class="muted small">${esc(defOf(p.sport)?.short)}</span></span></div>`).join('')}</div>`:''}
+  </section>`;
+  return top+board;
+}
+function viewScores(){
+  const cols=columns(),ro=canWrite?'':' disabled';
+  if(!cols.some(c=>c.id===scoreSport))scoreSport='nfl';
+  const def=defOf(scoreSport),picks=S.picks.filter(p=>p.sport===scoreSport);
+  const chips=`<div class="chips">${cols.map(c=>`<button class="chip" data-ssport="${c.id}" aria-pressed="${c.id===scoreSport}">${esc(c.short)}</button>`).join('')}</div>`;
+  const auto=['team','table','f1'].includes(def.kind);
+  let body;
+  if(!picks.length)body='<div class="notice">No one has drafted in this sport yet.</div>';
+  else if(def.kind==='golf'||def.kind==='tennis'){
+    body=picks.map(p=>{const r=S.results[rid(def.id,p.team)]||{},vals=(def.kind==='golf'?r.pos:r.res)||['','','',''];
+      return `<div class="card"><div class="cardhead"><strong>${esc(p.team)}</strong><span class="muted small">${esc(mname(p.member))}</span></div>
+       <div class="quad">${def.events.map(m=>`<span class="label" style="text-align:center">${m}</span>`).join('')}
+       ${def.events.map((m,i)=>def.kind==='golf'
+         ?`<input id="g-${slug(p.team)}-${i}" data-golf="${esc(p.team)}" data-i="${i}" value="${esc(vals[i])}" placeholder="–" aria-label="${m} finish for ${esc(p.team)}"${ro}>`
+         :`<select id="t-${slug(p.team)}-${i}" data-tennis="${esc(p.team)}" data-i="${i}" aria-label="${m} result for ${esc(p.team)}"${ro}>${SLAM_RES.map(([v,l])=>`<option value="${v}"${(vals[i]||'')===v?' selected':''}>${l}</option>`).join('')}</select>`).join('')}</div></div>`}).join('')
+      +`<p class="small muted">${def.kind==='golf'?'Enter a finishing place (1, T5, 34), MC for a missed cut, or WD. Blank means that major hasn’t been played. 1 is a win; 2 or T2 is a runner-up.':'Pick how far each player got. Withdrawing or skipping a Slam counts as a 0–1 loss. Blank means that Slam hasn’t happened.'}</p>`}
+  else body=picks.map(p=>{const r=S.results[rid(scoreSport,p.team)]||{},sc=teamScore(def,p.team);
+    const fld=(k,label)=>`<label class="field"><span class="label">${label}</span><input class="n" id="r-${slug(p.team)}-${k}" data-res="${esc(p.team)}" data-k="${k}" value="${esc(r[k]??'')}" inputmode="numeric"${ro}></label>`;
+    return `<div class="card"><div class="cardhead"><strong>${esc(p.team)}</strong><span><span class="muted small">${esc(mname(p.member))} · </span><span class="pts">${f1(sc.pts)}</span></span></div>
+     <div class="row">${def.kind==='event'?'':def.kind==='f1'?fld('pos','Position')+fld('pts','Points'):fld('w','Wins')+fld('l','Losses')+(def.x?fld('x',def.xName):'')+(def.kind==='table'?fld('pos','Position'):'')}
+      ${def.kind==='team'||def.kind==='event'?`<label class="field grow"><span class="label">${def.kind==='event'?'Result':'Postseason'}</span><select id="r-${slug(p.team)}-stage" data-res="${esc(p.team)}" data-k="stage"${ro}>${def.ladder.map((lab,i)=>lab?`<option value="${i}"${(r.stage|0)===i?' selected':''}>${esc(lab)} (+${f1(ladder(i)*(def.kind==='event'?evWeight(def.id):1))})</option>`:'').join('')}</select></label>`:''}</div>
+     ${def.kind==='event'?'':`<div class="small muted">${sc.season?`${def.kind==='f1'?'Ahead of '+Math.round(sc.season/BASE*((Number(S.meta.f1?.teams)||22)-1))+' drivers':(sc.pct??0).toFixed(3).replace(/^0/,'')} → ${f1(sc.season)} season pts`:'No results yet'}${sc.post?` · +${f1(sc.post)} postseason`:''}${sc.best?` · +${f1(sc.best)} best record`:''}</div>`}</div>`}).join('');
+  const doneCtl=auto?`<label class="row small" style="align-items:center;gap:8px"><input type="checkbox" id="done-${def.id}" data-done="${def.id}"${isDone(def.id)?' checked':''}${ro}> Regular season is over (locks in ${def.kind==='team'?'the best-record bonus':'final-position bonuses'})</label>`:'';
+  return `${chips}<section class="panel"><div class="cardhead"><h2>${esc(def.name)}</h2>${auto?`<span class="tag ${isDone(def.id)?'done':'live'}">${isDone(def.id)?'Season over':'Auto-updating'}</span>`:def.when?`<span class="small muted">${esc(def.when)}</span>`:''}</div>
+   <p class="small muted">${auto?'Records update every hour from live standings. '+(def.kind==='team'?'Set the postseason result as each round finishes.':'Final-position bonuses apply once you mark the season over.'):def.kind==='event'?'Set each country’s result as the event plays out.':'Enter results after each event. It takes a minute, four times a year.'}</p>
+   ${doneCtl}${body}</section>`;
+}
+function viewLeague(){
+  const ro=canWrite?'':' disabled',lock=S.picks.length>0;
+  const members=`<section class="panel"><h2>The field</h2>
+   ${S.members.length?`<div class="list">${S.members.map(m=>`<div><span>${esc(m.name)} ${m.uid&&m.uid===me?'<span class="you">You</span>':''}</span><span class="row">
+     ${!m.uid&&!S.members.some(x=>x.uid===me)?`<button class="btn ghost small" data-claim="${m.id}"${ro}>This is me</button>`:''}
+     ${m.uid===me?`<button class="btn ghost small" data-unclaim="${m.id}"${ro}>Not me</button>`:''}
+     ${!lock&&canWrite?`<button class="btn ghost small" data-del="${m.id}">Remove</button>`:''}</span></div>`).join('')}</div>`:'<p class="muted">No one yet. Add the first person below.</p>'}
+   ${confirmKey?.startsWith('del:')?`<div class="confirm"><span>Remove ${esc(mname(confirmKey.slice(4)))}?</span><button class="btn danger" data-yes="${confirmKey}">Remove</button><button class="btn ghost" data-no>Keep</button></div>`:''}
+   ${lock?'<p class="small muted">The draft has started, so the field is locked.</p>':`<form class="add" id="addMember"><input id="newMember" placeholder="Name" aria-label="Name" maxlength="40"${ro}><button class="btn"${ro}>Add</button></form>`}
+   <p class="small muted">Tap “This is me” on your own name, on each phone or computer you use, so the draft shows when you’re up.</p></section>`;
+  const evs=eventList().map(e=>{const on=!!S.cfg.events?.[e.id]?.active,drafted=S.picks.some(p=>p.sport===e.id);
+    return `<div class="ev"><span><strong>${esc(e.name)}</strong><br><span class="small muted">${esc(e.when)}</span></span><span class="row">
+     ${on?`<label class="field"><span class="label">Weight</span><select id="evw-${e.id}" data-evw="${e.id}"${ro}>${[0.5,1,1.5,2].map(w=>`<option value="${w}"${evWeight(e.id)===w?' selected':''}>${w}×</option>`).join('')}</select></label>`:''}
+     <button class="btn ${on?'ghost':''} small" data-evtoggle="${e.id}"${drafted||!canWrite?' disabled':''}>${on?'Turn off':'Add to this year'}</button></span></div>`}).join('');
+  const bf=(k,label)=>`<label class="field"><span class="label">${label}</span><input class="n" id="b-${k}" data-bonus="${k}" value="${esc(B(k))}" inputmode="numeric"${ro}></label>`;
+  return members+`
+  <section class="panel"><h2>Special events</h2><p class="muted small">Turn on the big tournaments that land in your league year. Each person drafts one country or team, scored on the playoff scale (a title is worth ${ladder(5)}). Events added after the main draft get their own mini draft.</p>
+   <div>${evs}</div>
+   <form class="add" id="addEvent"><input id="newEvent" placeholder="Another event, e.g. Ryder Cup 2027" aria-label="Custom event name" maxlength="40"${ro}><button class="btn ghost"${ro}>Add event</button></form></section>
+  <section class="panel rules"><h2>Rulebook</h2>
+   <dl>
+    <dt>Season</dt><dd>Win % × 162 for every team sport, counting only regular-season games. Ties and NHL overtime losses count as half a win; Premier League draws as a third. A 12–5 NFL team scores .706 × 162 = 114.4, the same as a 114-win MLB team.</dd>
+    <dt>F1</dt><dd>One driver. Share of the other drivers yours is ahead of in the drivers’ championship × 162. 1st = 162, last = 0.</dd>
+    <dt>Golf</dt><dd>3 golfers × 4 majors. Each finish scores the share of the field beaten; a missed cut counts as beating a quarter of the field. Averaged, × 162. +${B('majorWin')} per major won, +${B('majorRunnerUp')} per runner-up.</dd>
+    <dt>Tennis</dt><dd>2 players × 4 Slams. Combined match record × 162. Withdrawing counts as 0–1. +${B('slamWin')} per Slam title, +${B('slamFinal')} per final lost.</dd>
+    <dt>Playoffs</dt><dd>+${B('makeIt')} to make it, +${B('perRound')} per round won (a bye counts as a win), +${B('champ')} more for the title. Champion = ${ladder(5)}, runner-up = ${ladder(4)}.</dd>
+    <dt>Best record</dt><dd>+${B('best')} for the best regular-season record in the league (split ties all get it). In the Premier League and F1 that’s the champion.</dd>
+    <dt>No playoffs</dt><dd>Premier League final table: 1st ${ladder(5)}, 2nd ${ladder(4)}, 3rd–4th ${ladder(3)}, 5th–6th ${ladder(2)}, 7th–10th ${ladder(1)}. F1 drivers’ standings use the same cutoffs.</dd>
+    <dt>Winner</dt><dd>Most total points. Tiebreak: most championships.</dd>
+   </dl>
+   <div class="row">
+    <label class="field"><span class="label">League year</span><input id="cfgSeason" value="${esc(S.cfg.season)}" style="width:8em"${ro}></label>
+    ${bf('makeIt','Make playoffs')}${bf('perRound','Per round')}${bf('champ','Title')}${bf('best','Best record')}
+    ${bf('majorWin','Major win')}${bf('majorRunnerUp','Major 2nd')}${bf('slamWin','Slam title')}${bf('slamFinal','Slam final')}
+   </div></section>
+  ${lock&&canWrite?`<section class="panel"><h3>Start over</h3><p class="small muted">Deletes every pick and sends the draft back to setup. Scores stay.</p><div><button class="btn danger" data-act="reset">Clear all picks</button></div>
+   ${confirmKey==='reset'?`<div class="confirm"><span>Delete all ${S.picks.length} picks? This can’t be undone.</span><button class="btn danger" data-yes="reset">Delete picks</button><button class="btn ghost" data-no>Cancel</button></div>`:''}</section>`:''}`;
+}
+
+/* ================= Writes ================= */
+const fail=e=>{console.error(e);toast(e?.code==='permission-denied'?'The database refused that change. Check the Firestore rules.':'Couldn’t save. Check your connection and try again.')};
+function queue(key,path,getData){dirty[key]=true;clearTimeout(timers[key]);timers[key]=setTimeout(()=>flush(key,path,getData),600)}
+async function flush(key,path,getData){if(!db)return;
+  if(inflight[key]){again[key]=[path,getData];return}inflight[key]=true;
+  try{await db.doc(path).set(getData())}catch(e){fail(e)}inflight[key]=false;
+  if(again[key]){const a=again[key];again[key]=null;flush(key,...a)}else dirty[key]=false}
+const saveCfg=()=>queue('cfg','config/main',()=>structuredClone(S.cfg));
+async function setDraft(d){S.draft=d;render();try{await db.doc('draft/main').set(d)}catch(e){fail(e)}}
+async function makePick(){
+  const d=D(),i=draftPicks().length,mid=onClock(i),p=pending;pending=null;if(!p||!mid)return;
+  if(takenMap(p.sport)[slug(p.team)]){render();return toast(p.team+' is already taken.')}
+  if((need(mid)[p.sport]||0)<1){render();return toast(mname(mid)+' already has their '+defOf(p.sport).short+' picks.')}
+  const n=nextN(),ref=db.doc('picks/'+pid(n));
+  try{const ex=await ref.get();if(ex.exists){toast('Someone just made that pick. The board has refreshed.');render();return}
+    const doc={n,member:mid,sport:p.sport,team:p.team,at:new Date().toISOString()};
+    S.picks.push(doc);render();await ref.set(doc);
+    if(i+1>=d.order.length*slotsTotal(d.slots))await setDraft({...d,status:'done'});
+  }catch(e){fail(e)}
+}
+
+/* ================= Events ================= */
+document.querySelector('nav').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.tab;confirmKey=null;pending=null;render();try{localStorage.setItem('gg-tab',tab)}catch(_){}});
+$('#view').addEventListener('click',async e=>{
+  const t=e.target.closest('button,tr[data-open]');if(!t)return;const ds=t.dataset;
+  if(ds.go){tab=ds.go;render();return}
+  if(ds.open){openRow=openRow===ds.open?null:ds.open;render();return}
+  if(ds.ssport){scoreSport=ds.ssport;render();return}
+  if(ds.psport){pickSport=ds.psport;pending=null;render();return}
+  if(ds.pick){pending={sport:pickSport,team:ds.pick};render();return}
+  if(ds.no!==undefined){confirmKey=null;render();return}
+  if(!canWrite)return;
+  if(ds.move){const [i,dir]=ds.move.split(':').map(Number);const o=draftOrder();[o[i],o[i+dir]]=[o[i+dir],o[i]];return setDraft({status:'setup',order:o})}
+  if(ds.claim){const m=S.members.find(x=>x.id===ds.claim);m.uid=me;render();try{await db.doc('members/'+m.id).set({name:m.name,order:m.order,uid:me})}catch(err){fail(err)}return}
+  if(ds.unclaim){const m=S.members.find(x=>x.id===ds.unclaim);delete m.uid;render();try{await db.doc('members/'+m.id).set({name:m.name,order:m.order})}catch(err){fail(err)}return}
+  if(ds.del){confirmKey='del:'+ds.del;render();return}
+  if(ds.evdraft){confirmKey='ev:'+ds.evdraft;render();return}
+  if(ds.evtoggle){const id=ds.evtoggle,cur=S.cfg.events?.[id];S.cfg.events={...S.cfg.events,[id]:{active:!cur?.active,weight:cur?.weight||1}};saveCfg();render();return}
+  if(ds.yes){const k=ds.yes;confirmKey=null;
+    if(k==='start')return setDraft({status:'live',order:draftOrder(),slots:mainSlots(),base:nextN(),startedAt:new Date().toISOString()});
+    if(k==='undo'){const last=draftPicks().at(-1);if(!last)return;S.picks=S.picks.filter(p=>p!==last);if(D().status==='done')S.draft={...D(),status:'live'};render();
+      try{await db.doc('picks/'+pid(last.n)).delete();await db.doc('draft/main').set(S.draft)}catch(err){fail(err)}return}
+    if(k.startsWith('del:')){const id=k.slice(4);S.members=S.members.filter(m=>m.id!==id);render();try{await db.doc('members/'+id).delete()}catch(err){fail(err)}return}
+    if(k.startsWith('ev:')){const id=k.slice(3);return setDraft({status:'live',order:standings().map(r=>r.m.id).reverse(),slots:{[id]:1},base:nextN(),startedAt:new Date().toISOString()})}
+    if(k==='reset'){const all=[...S.picks];S.picks=[];render();try{for(const p of all)await db.doc('picks/'+pid(p.n)).delete();await db.doc('draft/main').set({status:'setup',order:draftOrder()});toast('All picks cleared.')}catch(err){fail(err)}return}
+    return}
+  if(ds.act==='shuffle'){const o=draftOrder();for(let i=o.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[o[i],o[j]]=[o[j],o[i]]}return setDraft({status:'setup',order:o})}
+  if(ds.act==='start'){confirmKey='start';render();return}
+  if(ds.act==='undo'){confirmKey='undo';render();return}
+  if(ds.act==='reset'){confirmKey='reset';render();return}
+  if(ds.act==='cancelPick'){pending=null;render();return}
+  if(ds.act==='confirmPick'){makePick();return}
+});
+$('#view').addEventListener('submit',async e=>{e.preventDefault();if(!canWrite)return;const f=e.target;
+  if(f.id==='freePick'){const v=$('#freeInput').value.trim();if(!v)return;const def=defOf(pickSport);
+    const pool=def.kind==='golf'?GOLFERS:def.kind==='tennis'?TENNIS:COUNTRIES;pending={sport:pickSport,team:pool.find(x=>slug(x)===slug(v))||v};render();return}
+  if(f.id==='addMember'){const name=$('#newMember').value.trim();if(!name)return;
+    const order=S.members.reduce((a,m)=>Math.max(a,m.order||0),0)+1,ref=db.collection('members').doc();
+    S.members.push({id:ref.id,name,order});render();$('#newMember')?.focus();try{await ref.set({name,order})}catch(err){fail(err)}return}
+  if(f.id==='addEvent'){const name=$('#newEvent').value.trim();if(!name)return;const id='x-'+slug(name).slice(0,30);
+    if(eventList().some(x=>x.id===id))return toast('That event is already on the list.');
+    S.cfg.customEvents=[...(S.cfg.customEvents||[]),{id,name}];S.cfg.events={...S.cfg.events,[id]:{active:true,weight:1}};saveCfg();render()}
+});
+function saveResult(sport,team,mut){const id=rid(sport,team);const r={sport,team,...(S.results[id]||{})};mut(r);r.manual=true;S.results[id]=r;queue(id,'results/'+id,()=>S.results[id])}
+function onField(e){const t=e.target;if(!canWrite)return;
+  if(t.id==='cfgSeason'){S.cfg.season=t.value;$('#seasonLabel').textContent='League year '+t.value;saveCfg();return}
+  if(t.dataset.bonus){S.cfg.bonus={...DEF_BONUS,...S.cfg.bonus,[t.dataset.bonus]:Number(t.value)||0};saveCfg();return}
+  if(t.dataset.done){S.cfg.done={...S.cfg.done,[t.dataset.done]:t.checked};saveCfg();render();return}
+  if(t.dataset.evw){S.cfg.events={...S.cfg.events,[t.dataset.evw]:{...S.cfg.events[t.dataset.evw],weight:Number(t.value)}};saveCfg();render();return}
+  if(t.dataset.res!==undefined){saveResult(scoreSport,t.dataset.res,r=>{r[t.dataset.k]=t.value===''?'':Number(t.value)});if(t.tagName==='SELECT')render();return}
+  if(t.dataset.golf!==undefined){saveResult('golf',t.dataset.golf,r=>{const a=[...(r.pos||['','','',''])];a[+t.dataset.i]=t.value.trim();r.pos=a});return}
+  if(t.dataset.tennis!==undefined){saveResult('tennis',t.dataset.tennis,r=>{const a=[...(r.res||['','','',''])];a[+t.dataset.i]=t.value;r.res=a});render()}
+}
+$('#view').addEventListener('input',e=>{if(e.target.tagName==='INPUT'&&e.target.type!=='checkbox')onField(e)});
+$('#view').addEventListener('change',e=>{if(e.target.tagName==='SELECT'||e.target.type==='checkbox')onField(e)});
+
+/* ================= Live data ================= */
+try{tab=localStorage.getItem('gg-tab')||tab}catch(_){}
+if(!['standings','draft','scores','league'].includes(tab))tab='standings';
+function rerender(){const a=document.activeElement;if(a&&a.closest?.('#view')&&a.matches('input,select'))return;render()}
+(async()=>{
+  try{db=await connect()}catch(err){console.warn(err);ready=true;
+    $('#syncLine').textContent='Not connected';
+    $('#view').innerHTML=`<div class="notice">${err.code==='no-config'?'This site isn’t connected to its database yet. Paste your Firebase settings into config.js (see the README).':err.code==='auth/operation-not-allowed'?'Turn on Anonymous sign-in in Firebase → Authentication → Sign-in method.':'Couldn’t connect to the league database. Check your connection and reload.'}</div>`;return}
+  canWrite=true;
+  let got=0;const done=s=>{if(s?.metadata?.fromCache)return;if(++got>=4&&!ready){ready=true;render()}};
+  setTimeout(()=>{if(!ready){ready=true;render();toast('Still connecting. Showing what’s loaded.')}},10000);
+  db.collection('members').orderBy('order').onSnapshot(s=>{S.members=s.docs.map(d=>({id:d.id,...d.data()}));done(s);rerender()},e=>{done();fail(e)});
+  db.collection('picks').onSnapshot(s=>{S.picks=s.docs.map(d=>({...d.data()})).filter(p=>typeof p.n==='number').sort((a,b)=>a.n-b.n);done(s);rerender()},e=>{done();fail(e)});
+  db.doc('draft/main').onSnapshot(s=>{S.draft=s.exists?{...s.data()}:{status:'setup',order:[]};done(s);rerender()},e=>{done();fail(e)});
+  db.doc('config/main').onSnapshot(s=>{if(!dirty.cfg){const d=s.exists?structuredClone(s.data()):{};S.cfg={...structuredClone(DEF_CFG),...d,bonus:{...DEF_BONUS,...(d.bonus||{})}}}done(s);rerender()},e=>{done();fail(e)});
+  db.collection('results').onSnapshot(s=>{const next={};s.docs.forEach(d=>next[d.id]=structuredClone(d.data()));for(const k in S.results)if(dirty[k])next[k]=S.results[k];S.results=next;rerender()},fail);
+  db.collection('meta').onSnapshot(s=>{S.meta={};s.docs.forEach(d=>S.meta[d.id]=d.data());rerender()},()=>{});
+  db.doc('sync/main').onSnapshot(s=>{S.sync=s.exists?s.data():null;rerender()},()=>{});
+})();
+</script>
+</body>
+</html>
