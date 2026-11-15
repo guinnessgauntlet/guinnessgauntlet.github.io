@@ -66,9 +66,9 @@ function stat(entry, names) {
   }
   return null;
 }
-async function fetchLeague(id) {
-  const L = LEAGUES[id], season = seasons[id];
-  const json = await getJSON(`${ESPN}/v2/sports/${L.path}/standings?season=${season}`, id);
+async function fetchLeague(id, seasonOverride) {
+  const L = LEAGUES[id], season = seasonOverride ?? seasons[id];
+  const json = await getJSON(`${ESPN}/v2/sports/${L.path}/standings?season=${season}`, seasonOverride ? id + '-prev' : id);
   if (!json) return null;
   const entries = collect(json);
   const seen = entries.seasonsSeen || new Set();
@@ -88,8 +88,10 @@ async function fetchLeague(id) {
   const played = rows.filter(r => pct(r) != null);
   const top = played.length ? Math.max(...played.map(pct)) : null;
   const best = top == null ? [] : played.filter(r => Math.abs(pct(r) - top) < 1e-9).map(r => r.team);
+  const low = played.length ? Math.min(...played.map(pct)) : null;
+  const worst = low == null ? [] : played.filter(r => Math.abs(pct(r) - low) < 1e-9).map(r => r.team);
   const done = rows.every(r => r.w + r.l + r.x >= L.games - (L.slack || 0));
-  return { rows, best, done };
+  return { rows, best, worst, done };
 }
 
 /* ---------- playoffs ---------- */
@@ -136,22 +138,24 @@ async function fetchPlayoffs(id) {
 }
 
 /* ---------- F1 ---------- */
-async function fetchF1() {
-  const year = seasons.f1;
-  const json = await getJSON(`https://api.jolpi.ca/ergast/f1/${year}/driverstandings.json`, 'f1');
+async function fetchF1(yearOverride) {
+  const year = yearOverride ?? seasons.f1;
+  const json = await getJSON(`https://api.jolpi.ca/ergast/f1/${year}/driverstandings.json`, yearOverride ? 'f1-prev' : 'f1');
   const list = json?.MRData?.StandingsTable?.StandingsLists?.[0];
   if (!list?.DriverStandings?.length) { log(`F1: no ${year} standings yet.`); return null; }
   const rows = list.DriverStandings.map(d => ({
     team: `${d.Driver?.givenName ?? ''} ${d.Driver?.familyName ?? ''}`.trim(),
     pos: Number(d.position || d.positionText) || null, pts: Number(d.points) || 0,
   })).filter(r => r.team);
-  let done = false;
+  let done = false, total = null;
+  const round = Number(list.round) || null;
   try {
     const sched = await getJSON(`https://api.jolpi.ca/ergast/f1/${year}.json`, 'f1-schedule');
-    const total = Number(sched?.MRData?.total) || null;
-    done = !!total && Number(list.round) >= total;
+    total = Number(sched?.MRData?.total) || null;
+    done = !!total && round >= total;
   } catch { /* schedule optional */ }
-  return { rows, best: rows.filter(r => r.pos === 1).map(r => r.team), done };
+  const last = Math.max(...rows.map(r => r.pos || 0));
+  return { rows, best: rows.filter(r => r.pos === 1).map(r => r.team), worst: rows.filter(r => r.pos === last).map(r => r.team), done, round, total };
 }
 
 /* ---------- golf ---------- */
@@ -201,7 +205,7 @@ async function fetchTennis() {
     const [a, b] = SLAMS[i].win(year);
     if (today < a) { out.push(null); continue; }
     const res = new Map(); let finalDone = false, found = false;
-    for (const tour of ['atp', 'wta']) {
+    for (const tour of ['atp']) { // men's singles only
       const json = await getJSON(`${ESPN}/site/v2/sports/tennis/${tour}/scoreboard?dates=${a}-${b}&limit=1000`, `tennis-${tour}-${i}`);
       for (const ev of (json?.events || []).filter(e => SLAMS[i].re.test(e.name || e.shortName || ''))) {
         found = true;
@@ -228,6 +232,26 @@ async function fetchTennis() {
     out.push(found ? { map: res, complete: finalDone || today > b } : null);
   }
   if (!out.some(Boolean)) { log('Tennis: no 2027 Slams underway yet.'); return null; }
+  return out;
+}
+
+/* ---------- team logos ---------- */
+// ESPN's team lists include logos even before a season starts. Prefer the version made for dark backgrounds.
+async function fetchLogos() {
+  const out = {};
+  for (const [id, L] of Object.entries(LEAGUES)) {
+    try {
+      const j = await getJSON(`${ESPN}/site/v2/sports/${L.path}/teams?limit=100`, id + '-teams');
+      const teams = j?.sports?.[0]?.leagues?.[0]?.teams || [];
+      const m = {};
+      for (const t of teams) {
+        const tm = t.team || t, logos = tm.logos || [];
+        const pick = logos.find(l => (l.rel || []).includes('dark')) || logos.find(l => (l.rel || []).includes('default')) || logos[0];
+        if (tm.displayName && pick?.href) m[tm.displayName] = pick.href;
+      }
+      if (Object.keys(m).length) out[id] = m;
+    } catch (e) { log(`${L.label} logos: ${e.message}`); }
+  }
   return out;
 }
 
@@ -275,16 +299,17 @@ async function main() {
       if (post) f.stage = post.stage.get(r.team) ?? 0;
       docs.set(rid(sport, r.team), f);
     }
-    const best = new Set(data.best);
+    const best = new Set(data.best), worst = new Set(data.worst || []);
     for (const p of picks.filter(p => p.sport === sport)) {
       const id = rid(sport, p.team); if (docs.has(id)) continue;
       const hit = matchName(data.rows.map(r => r.team), p.team);
       if (!hit) { problems.push(`no match for ${p.team}`); continue; }
       docs.set(id, { ...docs.get(rid(sport, hit)), team: p.team, feed: false });
       if (best.has(hit)) best.add(p.team);
+      if (worst.has(hit)) worst.add(p.team);
     }
     for (const [id, f] of docs) put(id, f);
-    writes.push(['meta/' + sport, { best: [...best], teams: data.rows.length, season: seasons[sport], done: !!(data.done || (post && post.stage.size)) }]);
+    writes.push(['meta/' + sport, { best: [...best], worst: [...worst], teams: data.rows.length, season: seasons[sport], done: !!(data.done || (post && post.stage.size)), ...(sport === 'f1' ? { round: data.round, total: data.total } : {}) }]);
     updated.push(label);
     const champ = post ? [...post.stage].filter(([, s]) => s === 5).map(([t]) => t)[0] : null;
     log(`${label}: ${data.rows.length} rows, best: ${[...best].join(' / ') || '—'}, season over: ${data.done ? 'yes' : 'no'}${post ? `, ${post.stage.size} playoff teams${champ ? ', champion ' + champ : ''}` : ''}`);
@@ -317,6 +342,22 @@ async function main() {
     }
     updated.push('Tennis');
   }
+
+  // Last season's results, used by the site to project this season during the draft
+  const prev = {};
+  for (const sport of Object.keys(LEAGUES)) {
+    const L = LEAGUES[sport];
+    const d = await guard(L.label + ' last season', () => fetchLeague(sport, seasons[sport] - 1));
+    if (!d) continue;
+    prev[sport] = Object.fromEntries(d.rows.map(r => { const gp = r.w + r.l + r.x; return [r.team, gp ? +((r.w + (L.xw || 0) * r.x) / gp).toFixed(4) : 0.5]; }));
+  }
+  const f1prev = await guard('F1 last season', () => fetchF1(seasons.f1 - 1));
+  if (f1prev) { const N = f1prev.rows.length; prev.f1 = Object.fromEntries(f1prev.rows.map(r => [r.team, N > 1 && r.pos ? +((N - r.pos) / (N - 1)).toFixed(4) : 0.5])); }
+  if (Object.keys(prev).length) { writes.push(['meta/prev', prev]); log(`Last season: ${Object.entries(prev).map(([k, v]) => `${k} ${Object.keys(v).length}`).join(', ')}`); }
+
+  // Logos
+  const logos = await guard('Logos', fetchLogos);
+  if (logos && Object.keys(logos).length) { writes.push(['meta/logos', logos]); log(`Logos: ${Object.entries(logos).map(([k, v]) => `${k} ${Object.keys(v).length}`).join(', ')}`); }
 
   const note = (updated.length ? updated.join(', ') + ' updated' : 'No seasons in progress') + (problems.length ? ' · ' + problems.slice(0, 3).join(', ') : '');
   writes.push(['sync/main', { at: NOW.toISOString(), note: note.slice(0, 120) }]);
