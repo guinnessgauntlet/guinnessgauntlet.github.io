@@ -93,6 +93,10 @@ input.n{width:4.6em;font-family:var(--f-mono);text-align:center}
 .team:hover:not(:disabled){border-color:var(--amber)}
 .team:disabled{opacity:.38;cursor:default}
 .team small{display:block;font-size:11px;color:var(--muted);font-family:var(--f-mono)}
+.team{display:flex;gap:9px;align-items:center}.team>span{min-width:0}
+.logo{width:22px;height:22px;object-fit:contain;flex:none;vertical-align:middle}
+.logo.sm{width:18px;height:18px;margin-right:6px}
+.logo.lg{width:30px;height:30px;margin-right:8px}
 .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border:1px solid var(--amber);border-radius:8px;padding:12px}
 .list{display:flex;flex-direction:column}
 .list>div{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--rule);flex-wrap:wrap}
@@ -178,7 +182,9 @@ const SPORTS=[
  {id:'f1',name:'Formula 1',short:'F1',kind:'f1',teams:T('Alex Albon|Andrea Kimi Antonelli|Arvid Lindblad|Carlos Sainz|Charles Leclerc|Esteban Ocon|Fernando Alonso|Franco Colapinto|Gabriel Bortoleto|George Russell|Isack Hadjar|Lance Stroll|Lando Norris|Lewis Hamilton|Liam Lawson|Max Verstappen|Nico Hülkenberg|Oliver Bearman|Oscar Piastri|Pierre Gasly|Sergio Pérez|Valtteri Bottas'),
   ladder:['11th or lower','7th–10th','5th–6th','3rd–4th','2nd','World champion']},
  {id:'golf',name:'Golf majors',short:'Golf',kind:'golf',count:3,events:['Masters','PGA','U.S. Open','The Open']},
- {id:'tennis',name:'Grand Slam tennis',short:'Tennis',kind:'tennis',count:2,events:['Aus Open','French','Wimbledon','US Open']}
+ {id:'tennis',name:'Grand Slam tennis (men)',short:'Tennis',kind:'tennis',count:2,events:['Aus Open','French','Wimbledon','US Open']},
+ {id:'avpm',name:"AVP men’s pair",short:'AVP M',kind:'avp',pool:[],pickLabel:'Type the pair, e.g. Partain / Benesh'},
+ {id:'avpw',name:"AVP women’s pair",short:'AVP W',kind:'avp',pool:[],pickLabel:'Type the pair, e.g. Hughes / Cheng'}
 ];
 const SLAM_RES=[['','—'],['R128','Lost 1st rd'],['R64','Lost 2nd rd'],['R32','Lost 3rd rd'],['R16','Lost 4th rd'],['QF','Lost QF'],['SF','Lost SF'],['F','Runner-up'],['W','Won'],['WD','Withdrew / skipped']];
 const SLAM_WL={R128:[0,1],R64:[1,1],R32:[2,1],R16:[3,1],QF:[4,1],SF:[5,1],F:[6,1],W:[7,0],WD:[0,1]};
@@ -197,10 +203,15 @@ const EVENTS=[
 const GENERIC=['Out early','Reached the knockouts','Lost quarterfinal','Lost semifinal','Lost final','Won it'];
 const COUNTRIES=T('Argentina|Australia|Austria|Belgium|Brazil|Canada|China|Colombia|Croatia|Denmark|England|Fiji|France|Georgia|Germany|Great Britain|India|Ireland|Italy|Jamaica|Japan|Kenya|Mexico|Morocco|Netherlands|New Zealand|Nigeria|Norway|Pakistan|Portugal|Samoa|Scotland|Senegal|South Africa|South Korea|Spain|Sri Lanka|Sweden|Switzerland|Tonga|United States|Uruguay|Wales|West Indies');
 const GOLFERS=T('Scottie Scheffler|Rory McIlroy|Xander Schauffele|Bryson DeChambeau|Jon Rahm|Ludvig Åberg|Collin Morikawa|Tommy Fleetwood|Justin Thomas|Viktor Hovland|Patrick Cantlay|Hideki Matsuyama|Jordan Spieth|Brooks Koepka|Shane Lowry|Tyrrell Hatton|Russell Henley|Sepp Straka|Keegan Bradley|J.J. Spaun|Robert MacIntyre|Cameron Young|Ben Griffin|Harris English|Justin Rose|Matt Fitzpatrick|Sam Burns|Wyndham Clark|Joaquín Niemann|Tony Finau|Corey Conners|Akshay Bhatia|Min Woo Lee|Jason Day|Adam Scott|Cameron Smith|Patrick Reed|Tom Kim|Aaron Rai|Chris Gotterup|Nicolai Højgaard|Jake Knapp|Maverick McNealy|Si Woo Kim|Daniel Berger|Max Homa');
-const TENNIS=T('Jannik Sinner|Carlos Alcaraz|Novak Djokovic|Alexander Zverev|Taylor Fritz|Jack Draper|Ben Shelton|Lorenzo Musetti|Alex de Minaur|Holger Rune|Daniil Medvedev|Casper Ruud|Tommy Paul|Frances Tiafoe|Andrey Rublev|João Fonseca|Jakub Menšík|Félix Auger-Aliassime|Aryna Sabalenka|Iga Świątek|Coco Gauff|Jessica Pegula|Elena Rybakina|Madison Keys|Jasmine Paolini|Mirra Andreeva|Qinwen Zheng|Amanda Anisimova|Emma Navarro|Elina Svitolina|Karolína Muchová|Naomi Osaka|Belinda Bencic|Victoria Mboko');
-const DEF_BONUS={makeIt:5,perRound:5,champ:10,best:10,majorWin:10,majorRunnerUp:5,slamWin:10,slamFinal:5};
-const DEF_CFG={season:'2026–27',bonus:DEF_BONUS,field:[90,156,156,156],done:{},events:{},customEvents:[]};
-const MAX_PEOPLE=20;
+const TENNIS=T('Jannik Sinner|Carlos Alcaraz|Novak Djokovic|Alexander Zverev|Taylor Fritz|Jack Draper|Ben Shelton|Lorenzo Musetti|Alex de Minaur|Holger Rune|Daniil Medvedev|Casper Ruud|Tommy Paul|Frances Tiafoe|Andrey Rublev|João Fonseca|Jakub Menšík|Félix Auger-Aliassime');
+const DEF_BONUS={makeIt:5,perRound:5,champ:10,best:10,spoon:10,slamWin:10,slamFinal:5};
+const DEF_CFG={season:'2026–27',bonus:DEF_BONUS,done:{},events:{},customEvents:[],sportsOn:{nfl:true,nba:true,nhl:true,epl:true,tennis:true},avpEvents:[]};
+const SEASON_GAMES={nfl:17,nba:82,nhl:82,mlb:162,epl:38};
+const TENNIS_WIN=BASE/56; // 2 players × 4 Slams × 7 matches = 162 if they won everything
+const AVP_FIN=[['','—',0],['1','1st',10],['2','2nd',6],['3','3rd',4],['5','5th',3],['7','7th–9th',1],['x','Lower / didn’t play',0]];
+function golfPts(pos){const s=String(pos??'').trim().toUpperCase();if(!s||/MC|CUT|WD|DQ|DNS/.test(s))return 0;
+  const n=parseInt(s.replace(/\D/g,''),10);if(!n)return 0;
+  return n===1?30:n===2?20:n===3?16:n===4?14:n===5?12:n<=10?16-n:n<=20?5:n<=40?3:1}
 
 /* ================= State ================= */
 let ready=false,canWrite=false,tab='standings',scoreSport='nfl',pickSport=null,pending=null,openRow=null,confirmKey=null;
@@ -219,9 +230,13 @@ const isDone=id=>S.cfg.done?.[id]??!!S.meta[id]?.done;
 /* ================= Definitions ================= */
 const eventList=()=>[...EVENTS,...(S.cfg.customEvents||[]).map(c=>({...c,short:c.name.slice(0,10),when:'Custom event',ladder:GENERIC}))];
 const activeEvents=()=>eventList().filter(e=>S.cfg.events?.[e.id]?.active);
-const defOf=id=>SPORTS.find(s=>s.id===id)||{...eventList().find(e=>e.id===id),kind:'event'};
+const defOf=id=>id==='flex'?FLEX:SPORTS.find(s=>s.id===id)||{...eventList().find(e=>e.id===id),kind:'event'};
 const evWeight=id=>{const w=Number(S.cfg.events?.[id]?.weight);return w>0?w:1};
-function columns(){const ids=new Set(S.picks.map(p=>p.sport));return [...SPORTS,...eventList().filter(e=>S.cfg.events?.[e.id]?.active||ids.has(e.id)).map(e=>({...e,kind:'event'}))]}
+const FLEX={id:'flex',name:'Flex',short:'Flex',kind:'flex'};
+const activeSports=()=>SPORTS.filter(x=>S.cfg.sportsOn?.[x.id]);
+const flexSports=()=>activeSports().filter(x=>x.kind!=='avp');
+const maxPeople=()=>Math.min(99,...activeSports().filter(x=>x.teams).map(x=>x.teams.length));
+function columns(){const ids=new Set(S.picks.map(p=>p.sport));return [...SPORTS.filter(x=>S.cfg.sportsOn?.[x.id]||S.picks.some(p=>p.sport===x.id&&!p.flex)),...((D().slots||{}).flex||S.picks.some(p=>p.flex)?[FLEX]:[]),...eventList().filter(e=>S.cfg.events?.[e.id]?.active||ids.has(e.id)).map(e=>({...e,kind:'event'}))]}
 function teamList(sp){ // prefer names written by the score updater so picks match its records
   const fromFeed=Object.values(S.results).filter(r=>r.sport===sp.id&&r.feed).map(r=>r.team);
   return (fromFeed.length>=sp.teams.length*0.8?fromFeed:sp.teams).slice().sort((a,b)=>a.localeCompare(b));
@@ -236,38 +251,62 @@ const ladder=st=>st<=0?0:B('makeIt')+B('perRound')*(st-1)+(st>=5?B('champ'):0);
 const posStage=(id,pos)=>{if(!pos)return 0;
   return pos===1?5:pos===2?4:pos<=4?3:pos<=6?2:pos<=10?1:0};
 function pctOf(sp,r){if(!r)return null;const w=+r.w||0,l=+r.l||0,x=+r.x||0,gp=w+l+x;return gp?(w+(sp.xw||0)*x)/gp:null}
-function golfVal(pos,i){const s=String(pos??'').trim().toUpperCase();if(!s)return null;
-  if(/^(MC|CUT)$/.test(s))return .25;if(/^(WD|DQ|DNS)$/.test(s))return 0;
-  const n=parseInt(s.replace(/\D/g,''),10);if(!n)return null;const N=Number(S.meta.golf?.field?.[i])||Number(S.cfg.field?.[i])||156;
-  return Math.max(0,Math.min(1,(N-n)/(N-1)))}
 function teamScore(sp,team){
   const r=S.results[rid(sp.id,team)];
   if(sp.kind==='event'){const st=r?.stage|0,post=ladder(st)*evWeight(sp.id);return {season:0,post,best:0,pts:post,stage:st,r}}
-  let season=0,stage=r?.stage|0,pct=null,best=0;
-  if(sp.kind==='f1'){const N=Number(S.meta.f1?.teams)||22,pos=+r?.pos||0;if(pos)season=(N-pos)/(N-1)*BASE;
-    if(isDone('f1')){stage=posStage('f1',pos);if(pos===1)best=B('best')}else stage=0}
-  else{pct=pctOf(sp,r);season=pct==null?0:pct*BASE;
-    if(sp.kind==='table'){if(isDone(sp.id)){stage=posStage(sp.id,+r?.pos||0);if(+r?.pos===1)best=B('best')}else stage=0}
-    else if(isDone(sp.id)&&(S.meta[sp.id]?.best||[]).map(slug).includes(slug(team)))best=B('best')}
-  const post=ladder(stage);return {season,post,best,pts:season+post+best,pct,stage,r};
+  let season=0,stage=r?.stage|0,pct=null,best=0,spoon=0;
+  if(sp.kind==='f1'){const N=Number(S.meta.f1?.teams)||22,pos=+r?.pos||0,f=S.meta.f1;
+    const frac=isDone('f1')?1:f?.total?Math.min(1,(+f.round||0)/f.total):1;
+    if(pos)season=(N-pos)/(N-1)*BASE*frac;
+    if(isDone('f1')){stage=posStage('f1',pos);if(pos===1)best=B('best');if(pos&&pos===N)spoon=B('spoon')}else stage=0}
+  else{pct=pctOf(sp,r);const w=+r?.w||0,x=+r?.x||0;season=(w+(sp.xw||0)*x)*BASE/(SEASON_GAMES[sp.id]||82);
+    if(sp.kind==='table'){if(isDone(sp.id)){const pos=+r?.pos||0;stage=posStage(sp.id,pos);if(pos===1)best=B('best');if(pos>=18)spoon=B('spoon')}else stage=0}
+    else if(isDone(sp.id)){const has=k=>(S.meta[sp.id]?.[k]||[]).map(slug).includes(slug(team));if(has('best'))best=B('best');if(has('worst'))spoon=B('spoon')}}
+  const post=ladder(stage);return {season,post,best,spoon,pts:season+post+best-spoon,pct,stage,r};
 }
 function scoreOf(mid,sp){
-  const mine=S.picks.filter(p=>p.member===mid&&p.sport===sp.id);
-  if(sp.kind==='golf'){let vals=[],wins=0,seconds=0;const items=mine.map(p=>{const pos=S.results[rid('golf',p.team)]?.pos||[];
-      pos.forEach((v,i)=>{const g=golfVal(v,i);if(g!=null)vals.push(g);const s=String(v||'').trim().toUpperCase();if(s==='1')wins++;else if(s==='2'||s==='T2')seconds++});return {team:p.team,pos}});
-    const season=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length*BASE:0,post=wins*B('majorWin')+seconds*B('majorRunnerUp');
-    return {season,post,pts:season+post,items,note:`${wins} won · ${seconds} runner-up`}}
+  if(sp.kind==='flex'){const items=S.picks.filter(p=>p.member===mid&&p.flex).map(p=>{const d=defOf(p.sport);
+      const sc=d.kind==='golf'||d.kind==='tennis'?groupScore(d,[p]):teamScore(d,p.team);return {team:p.team,sport:p.sport,...sc}});
+    return {season:items.reduce((a,i)=>a+i.season,0),post:items.reduce((a,i)=>a+i.post+(i.best||0)-(i.spoon||0),0),pts:items.reduce((a,i)=>a+i.pts,0),items}}
+  return groupScore(sp,S.picks.filter(p=>p.member===mid&&p.sport===sp.id&&!p.flex));
+}
+function groupScore(sp,mine){
+  if(sp.kind==='golf'){let season=0,wins=0;const items=mine.map(p=>{const pos=S.results[rid('golf',p.team)]?.pos||[];
+      pos.forEach(v=>{season+=golfPts(v);if(String(v||'').trim()==='1')wins++});return {team:p.team,pos}});
+    return {season,post:0,pts:season,items,note:`${wins} major${wins===1?'':'s'} won`}}
   if(sp.kind==='tennis'){let W=0,L=0,titles=0,finals=0;const items=mine.map(p=>{const res=S.results[rid('tennis',p.team)]?.res||[];
       res.forEach(c=>{const wl=SLAM_WL[c];if(wl){W+=wl[0];L+=wl[1]}if(c==='W')titles++;if(c==='F')finals++});return {team:p.team,res}});
-    const season=W+L?W/(W+L)*BASE:0,post=titles*B('slamWin')+finals*B('slamFinal');
+    const season=W*TENNIS_WIN,post=titles*B('slamWin')+finals*B('slamFinal');
     return {season,post,pts:season+post,items,note:`${W}–${L} in Slam matches`}}
+  if(sp.kind==='avp'){let season=0;const evs=S.cfg.avpEvents||[];const items=mine.map(p=>{const res=S.results[rid(sp.id,p.team)]?.res||{};
+      const codes=evs.map(e=>res[e.id]||'');codes.forEach(c=>{season+=(AVP_FIN.find(f=>f[0]===c)?.[2])||0});return {team:p.team,codes}});
+    return {season,post:0,pts:season,items,note:`${evs.length} tournament${evs.length===1?'':'s'} counted`}}
   const items=mine.map(p=>({team:p.team,...teamScore(sp,p.team)}));
   const pts=items.reduce((a,i)=>a+i.pts,0);
-  return {season:items.reduce((a,i)=>a+i.season,0),post:items.reduce((a,i)=>a+i.post+i.best,0),pts,items};
+  return {season:items.reduce((a,i)=>a+i.season,0),post:items.reduce((a,i)=>a+i.post+i.best-(i.spoon||0),0),pts,items};
 }
 function standings(){const cols=columns();
   return S.members.map(m=>{const by={};let total=0,titles=0;for(const c of cols){by[c.id]=scoreOf(m.id,c);total+=by[c.id].pts;titles+=(by[c.id].items||[]).filter(i=>i.stage===5).length}
     return {m,by,total,titles}}).sort((a,b)=>b.total-a.total||b.titles-a.titles)}
+function logoOf(sport,team){const m=S.meta.logos?.[sport];if(!m)return null;
+  if(m[team])return m[team];const p=slug(team),keys=Object.keys(m);
+  const k=keys.find(k=>slug(k)===p)||keys.find(k=>slug(k).endsWith('-'+p)||p.endsWith('-'+slug(k)));return k?m[k]:null}
+const logoImg=(sport,team,cls='')=>{const u=logoOf(sport,team);return u?`<img class="logo ${cls}" src="${esc(u)}" alt="" loading="lazy" onerror="this.remove()">`:''};
+/* Draft projections: blend this season's pace with last season (early-season records are noisy). */
+function prevPct(sport,team){const m=S.meta.prev?.[sport];if(!m)return null;if(m[team]!=null)return m[team];
+  const p=slug(team),k=Object.keys(m).find(k=>slug(k)===p||slug(k).endsWith('-'+p)||p.endsWith('-'+slug(k)));return k?m[k]:null}
+function projPts(sp,team){
+  if(!['team','table','f1'].includes(sp.kind))return null;
+  const r=S.results[rid(sp.id,team)],prev=prevPct(sp.id,team);
+  if(sp.kind==='f1'){const N=Number(S.meta.f1?.teams)||22,pos=+r?.pos||0;const cur=pos?(N-pos)/(N-1):null;
+    const base=prev??.35;return (cur==null?base:(cur+base)/2)*BASE}
+  const base=prev??(sp.id==='epl'?.4:.5),cur=pctOf(sp,r),gp=r?(+r.w||0)+(+r.l||0)+(+r.x||0):0,k=SEASON_GAMES[sp.id]*.25;
+  return (cur==null?base:(gp*cur+k*base)/(gp+k))*BASE}
+function projRanks(sp){const list=teamList(sp).map(t=>[t,projPts(sp,t)??0]).sort((a,b)=>b[1]-a[1]);const m={};list.forEach(([t],i)=>m[slug(t)]=i+1);return m}
+let draftSort='proj',flexSport='nfl';
+const chooserSport=()=>pickSport==='flex'?flexSport:pickSport;
+try{draftSort=localStorage.getItem('gg-sort')||'proj'}catch(_){}
+
 function record(sp,r){if(!r)return '—';
   if(sp.kind==='f1')return r.pos?`P${r.pos} · ${r.pts??0} pts`:'—';
   const w=+r.w||0,l=+r.l||0,x=+r.x||0;if(!w&&!l&&!x)return '0–0';
@@ -280,9 +319,10 @@ function draftOrder(){const o=(D().order||[]).filter(id=>S.members.some(m=>m.id=
 const slotsTotal=sl=>Object.values(sl||{}).reduce((a,b)=>a+b,0);
 function draftPicks(){const b=D().base||0;return S.picks.filter(p=>p.n>=b).sort((a,b)=>a.n-b.n)}
 function onClock(i){const o=D().order||[],N=o.length;if(!N)return null;const r=Math.floor(i/N),k=i%N;return o[r%2===0?k:N-1-k]}
-function need(mid){const sl=D().slots||{},b=D().base||0,out={};for(const id in sl)out[id]=sl[id]-S.picks.filter(p=>p.member===mid&&p.sport===id&&p.n>=b).length;return out}
+function need(mid){const sl=D().slots||{},b=D().base||0,out={},mine=S.picks.filter(p=>p.member===mid&&p.n>=b);
+  for(const id in sl)out[id]=sl[id]-(id==='flex'?mine.filter(p=>p.flex).length:mine.filter(p=>p.sport===id&&!p.flex).length);return out}
 function takenMap(sport){const m={};S.picks.filter(p=>p.sport===sport).forEach(p=>m[slug(p.team)]=p.member);return m}
-function mainSlots(){const sl={};SPORTS.forEach(s=>sl[s.id]=s.count||1);activeEvents().forEach(e=>{if(!S.picks.some(p=>p.sport===e.id))sl[e.id]=1});return sl}
+function mainSlots(){const sl={};activeSports().forEach(s=>sl[s.id]=s.count||1);sl.flex=1;activeEvents().forEach(e=>{if(!S.picks.some(p=>p.sport===e.id))sl[e.id]=1});return sl}
 const nextN=()=>S.picks.reduce((a,p)=>Math.max(a,p.n+1),0);
 const pid=n=>'p'+String(n).padStart(4,'0');
 
@@ -305,32 +345,38 @@ function viewStandings(){
     const isOpen=openRow===r.m.id;
     return `<tr class="click ${rank===1?'lead':''}" data-open="${r.m.id}" aria-expanded="${isOpen}"><td class="num l">${rank}</td><td class="l">${esc(r.m.name)}${r.m.uid&&r.m.uid===me?' <span class="you">You</span>':''}</td>${cols.map(c=>`<td class="num">${f1(r.by[c.id].pts)}</td>`).join('')}<td class="num total">${f1(r.total)}</td></tr>`
       +(isOpen?`<tr class="detail"><td colspan="${cols.length+3}">${breakdown(r,cols)}</td></tr>`:'')}).join('');
-  return `<section class="panel"><div class="cardhead"><h2>Standings</h2><span class="small muted">Tap a name for their teams</span></div>
+  const lead=rows[0],pints=S.members.length-1;
+  const leaders=cols.map(c=>{const best=rows.map(r=>({r,v:r.by[c.id].pts})).sort((a,b)=>b.v-a.v)[0];return best&&best.v>0?`<div><span>${esc(c.short)}</span><span>${esc(best.r.m.name)} <span class="num muted">${f1(best.v)}</span></span></div>`:''}).join('');
+  return `<div class="clock"><span class="label" style="color:inherit;opacity:.7">The stakes</span><div class="who" style="font-size:30px">🍺 ${esc(lead.m.name)} is owed ${pints} pint${pints===1?'':'s'}</div><div class="meta">Losers each buy the winner a Guinness when the season ends.</div></div>
+  <section class="panel"><div class="cardhead"><h2>Standings</h2><span class="small muted">Tap a name for their teams</span></div>
    <div class="scroll"><table><tr><th class="l">#</th><th class="l">Name</th>${cols.map(c=>`<th title="${esc(c.name)}">${esc(c.short)}</th>`).join('')}<th>Total</th></tr>${body}</table></div>
-   <p class="small muted">Season points are win % × 162, so every sport counts the same no matter how long its season is. Seasons in progress count at their current pace. Playoff, title and best-record bonuses are added as they’re earned.</p></section>`;
+   <p class="small muted">Everyone starts at 0. Each win is worth 162 ÷ the league’s season length (an NFL win is 9.5, an MLB win is 1), so a perfect season is worth the same in every sport. Playoff, title and best-record bonuses add on; the wooden spoon takes 10 away.</p></section>
+  ${leaders?`<section class="panel"><h3>Leading each sport</h3><div class="list">${leaders}</div></section>`:''}`;
 }
 function breakdown(r,cols){
   const rows=cols.flatMap(c=>{const s=r.by[c.id];
-    if(c.kind==='golf'||c.kind==='tennis'){if(!s.items.length)return [];
-      return s.items.map(it=>`<tr><td class="l">${c.short}</td><td class="l">${esc(it.team)}</td><td class="l num">${(c.kind==='golf'?it.pos:it.res).map(v=>esc(v||'–')).join(' · ')||'–'}</td><td></td><td></td></tr>`)
+    if(c.kind==='flex')return s.items.map(it=>{const d=defOf(it.sport);
+      return `<tr><td class="l">Flex · ${esc(d.short)}</td><td class="l">${logoImg(it.sport,it.team,'sm')}${esc(it.team)}</td><td class="l num">${d.kind==='golf'||d.kind==='tennis'?esc(it.note||''):record(d,it.r)}</td><td class="num">${f1(it.season)} + ${f1(it.post+(it.best||0))}</td><td class="num">${f1(it.pts)}</td></tr>`});
+    if(c.kind==='golf'||c.kind==='tennis'||c.kind==='avp'){if(!s.items.length)return [];
+      return s.items.map(it=>`<tr><td class="l">${c.short}</td><td class="l">${esc(it.team)}</td><td class="l num">${(c.kind==='golf'?it.pos:c.kind==='avp'?it.codes.map(v=>AVP_FIN.find(f=>f[0]===v)?.[1]):it.res).map(v=>esc(v||'–')).join(' · ')||'–'}</td><td></td><td></td></tr>`)
         .concat(`<tr><td class="l">${c.short}</td><td class="l muted">${s.note}</td><td></td><td class="num">${f1(s.season)} + ${f1(s.post)}</td><td class="num">${f1(s.pts)}</td></tr>`)}
     return s.items.map(it=>{const lab=c.ladder[it.stage]||'';
-      return `<tr><td class="l">${esc(c.short)}</td><td class="l">${esc(it.team)}</td><td class="l num">${c.kind==='event'?esc(lab):record(c,it.r)+(it.stage?` · ${esc(lab)}`:'')}${it.best?' · best record':''}</td><td class="num">${c.kind==='event'?'':f1(it.season)+' + '}${f1(it.post+it.best)}</td><td class="num">${f1(it.pts)}</td></tr>`})});
+      return `<tr><td class="l">${esc(c.short)}</td><td class="l">${logoImg(c.id,it.team,'sm')}${esc(it.team)}</td><td class="l num">${c.kind==='event'?esc(lab):record(c,it.r)+(it.stage?` · ${esc(lab)}`:'')}${it.best?' · best record':''}${it.spoon?' · wooden spoon':''}</td><td class="num">${c.kind==='event'?'':f1(it.season)+' + '}${f1(it.post+it.best-(it.spoon||0))}</td><td class="num">${f1(it.pts)}</td></tr>`})});
   return `<div class="scroll"><table><tr><th class="l">Sport</th><th class="l">Pick</th><th class="l">Record</th><th>Season + bonus</th><th>Pts</th></tr>${rows.join('')||'<tr><td class="l muted" colspan="5">No picks yet</td></tr>'}</table></div>`;
 }
 function viewDraft(){
   const d=D(),ro=isCommish?'':' disabled';
   if(d.status!=='live'&&!S.picks.length){
-    const order=draftOrder(),sl=mainSlots(),per=slotsTotal(sl),tooMany=S.members.length>MAX_PEOPLE;
+    const order=draftOrder(),sl=mainSlots(),per=slotsTotal(sl),tooMany=S.members.length>maxPeople();
     return `<section class="panel"><h2>Draft setup</h2>
-     <p class="muted">Snake draft. On your turn, take any team or player from any sport you still need. Everyone ends with one NFL, NBA, NHL, MLB, Premier League team, one F1 driver, three golfers and two tennis players${activeEvents().length?', plus one pick per special event':''}: ${per} picks each.</p>
+     <p class="muted">Snake draft. On your turn, take any team or player from any sport you still need. Everyone ends with ${activeSports().map(x=>(x.count>1?x.count+' ':'one ')+x.short+(x.kind==='golf'?' golfers':x.kind==='tennis'?' players':x.kind==='avp'?' pair':x.kind==='f1'?' driver':' team')).join(', ')} and one flex pick from any of those sports${activeEvents().length?', plus one pick per special event':''}: ${per} picks each.</p>
      ${S.members.length<2?`<div class="notice">Add at least two people on the League tab first${isCommish?', or add test drafters to try it out':''}.</div><div class="row"><button class="btn ghost" data-go="league">Go to League</button>${isCommish?'<button class="btn ghost" data-act="addTesters">Add 4 test drafters</button>':''}</div>`:`
      <div class="label">Draft order</div>
      <div class="list">${order.map((id,i)=>`<div><span><span class="num muted">${i+1}.</span> ${esc(mname(id))}</span><span class="row"><button class="btn ghost small" data-move="${i}:-1" aria-label="Move up"${i===0||!isCommish?' disabled':''}>↑</button><button class="btn ghost small" data-move="${i}:1" aria-label="Move down"${i===order.length-1||!isCommish?' disabled':''}>↓</button></span></div>`).join('')}</div>
-     <label class="field" style="max-width:220px"><span class="label">Pick timer</span><select id="pickSeconds" data-pickseconds${ro}>${[[0,'No timer'],[30,'30 seconds'],[60,'1 minute'],[90,'90 seconds'],[120,'2 minutes'],[180,'3 minutes'],[300,'5 minutes']].map(([v,l])=>`<option value="${v}"${(d.pickSeconds??120)===v?' selected':''}>${l}</option>`).join('')}</select></label>
+     <label class="field" style="max-width:220px"><span class="label">Pick timer</span><select id="pickSeconds" data-pickseconds${ro}>${[[0,'No timer'],[30,'30 seconds'],[60,'1 minute'],[80,'1 minute 20'],[119.5,'Perfect pour (119.5 sec)'],[180,'3 minutes']].map(([v,l])=>`<option value="${v}"${(d.pickSeconds??119.5)===v?' selected':''}>${l}</option>`).join('')}</select></label>
      <div class="row"><button class="btn ghost" data-act="shuffle"${ro}>Shuffle order</button>${isCommish?'<button class="btn ghost" data-act="addTesters">Add 4 test drafters</button>':''}<button class="btn" data-act="start"${tooMany||!isCommish?' disabled':''}>Start the draft</button></div>
      ${isCommish?'':'<p class="small muted">The commissioner sets the order and starts the draft.</p>'}
-     ${tooMany?`<p class="small" style="color:var(--bad)">The Premier League has 20 clubs, so the Gauntlet tops out at ${MAX_PEOPLE} people.</p>`:''}
+     ${tooMany?`<p class="small" style="color:var(--bad)">The smallest league this season has ${maxPeople()} teams, so the Gauntlet tops out at ${maxPeople()} people.</p>`:''}
      ${confirmKey==='start'?`<div class="confirm"><span>Start the draft with this order?</span><button class="btn" data-yes="start">Start</button><button class="btn ghost" data-no>Not yet</button></div>`:''}`}
     </section>`;
   }
@@ -339,23 +385,30 @@ function viewDraft(){
   if(d.status==='live'&&i<total){
     const mid=onClock(i),N=d.order.length,nd=need(mid),openSports=Object.keys(nd).filter(k=>nd[k]>0);
     if(!pickSport||!openSports.includes(pickSport))pickSport=openSports[0];
-    const def=defOf(pickSport),tk=takenMap(pickSport),mine=S.members.find(m=>m.id===mid);
+    if(pickSport==='flex'&&!flexSports().some(x=>x.id===flexSport))flexSport=flexSports()[0]?.id||'nfl';
+    const def=defOf(chooserSport()),tk=takenMap(def.id),mine=S.members.find(m=>m.id===mid);
     let chooser;
-    if(def.teams){chooser=`<div class="grid">${teamList(def).map(t=>{const own=tk[slug(t)],r=S.results[rid(def.id,t)];
-      return `<button class="team" data-pick="${esc(t)}"${own||!canWrite?' disabled':''}>${esc(t)}<small>${own?esc(mname(own)):r?record(def,r):''}</small></button>`}).join('')}</div>`}
+    if(def.teams){const ranks=projRanks(def),list=teamList(def);
+      if(draftSort==='proj')list.sort((a,b)=>(!!tk[slug(a)]-!!tk[slug(b)])||((projPts(def,b)??0)-(projPts(def,a)??0)));
+      chooser=`<div class="row" style="justify-content:space-between;align-items:center"><span class="small muted">Proj = estimated season points (this season’s pace blended with last season). #1 = best in the league.</span>
+        <label class="field"><span class="label">Sort</span><select id="draftSort" data-draftsort><option value="proj"${draftSort==='proj'?' selected':''}>Best projected</option><option value="az"${draftSort==='az'?' selected':''}>A–Z</option></select></label></div>
+       <div class="grid">${list.map(t=>{const own=tk[slug(t)],r=S.results[rid(def.id,t)],pp=projPts(def,t);
+      return `<button class="team" data-pick="${esc(t)}"${own||!canWrite?' disabled':''}>${logoImg(def.id,t)}<span>${esc(t)}<small>${own?esc(mname(own)):[r?record(def,r):'',pp!=null?`Proj ${Math.round(pp)} · #${ranks[slug(t)]}`:''].filter(Boolean).join(' · ')}</small></span></button>`}).join('')}</div>`}
     else{const pool=poolOf(def),sugg=pool.filter(x=>!tk[slug(x)]);
       chooser=`<form class="add" id="freePick"><input id="freeInput" list="freeList" placeholder="${pickPrompt(def)}" aria-label="Pick" maxlength="60" autocomplete="off"${canWrite?'':' disabled'}><datalist id="freeList">${sugg.map(x=>`<option value="${esc(x)}">`).join('')}</datalist><button class="btn"${canWrite?'':' disabled'}>Draft</button></form>
-       ${Object.keys(tk).length?`<p class="small muted">Taken: ${S.picks.filter(p=>p.sport===pickSport).map(p=>esc(p.team)+' ('+esc(mname(p.member))+')').join(', ')}</p>`:''}`}
+       ${Object.keys(tk).length?`<p class="small muted">Taken: ${S.picks.filter(p=>p.sport===def.id).map(p=>esc(p.team)+' ('+esc(mname(p.member))+')').join(', ')}</p>`:''}`}
     const nextUp=[1,2].map(k=>i+k<total?esc(mname(onClock(i+k))):null).filter(Boolean);
     top=`<div class="clock"><div class="clockrow"><div><span class="label" style="color:inherit;opacity:.7">On the clock · Pick ${i+1} of ${total} · Round ${Math.floor(i/N)+1}</span>
       <div class="who">${esc(mine?.name||'?')} ${mine?.uid&&mine.uid===me?'<span class="you">You</span>':''}</div>
       <div class="meta">${nextUp.length?'Then: '+nextUp.join(', '):'Last pick of the draft'}</div></div>
       ${d.pickSeconds?`<div class="timer" id="timer">${PINT}<div><div class="tleft" id="tLeft">–:––</div><div class="tsub" id="tSub">to pick</div></div></div>`:''}</div>
-      ${isCommish?`<div class="tctl"><button class="btn ghost small" data-act="autoPick">Auto-pick for ${esc(mine?.name||'them')}</button><button class="btn ghost small" data-act="autoAll">Auto-draft the rest</button></div>`:''}
+      ${isCommish?`<div class="tctl"><button class="btn ghost small" data-act="autoPick">Auto-pick for ${esc(mine?.name||'them')}</button><button class="btn ghost small" data-act="autoAll">${autoRunning?'Stop auto-draft':'Auto-draft the rest'}</button></div>`:''}
       ${d.pickSeconds&&isCommish?`<div class="tctl"><button class="btn ghost small" data-act="${d.paused?'resume':'pause'}">${d.paused?'Resume clock':'Pause clock'}</button><button class="btn ghost small" data-act="resetClock">Restart clock</button></div>`:''}</div>
+     ${bestAvailable(openSports)}
      <section class="panel"><div class="label">Still needs</div>
       <div class="chips">${Object.keys(d.slots).map(id=>`<button class="chip" data-psport="${id}" aria-pressed="${id===pickSport}"${nd[id]>0?'':' disabled'}>${esc(defOf(id).short)}${d.slots[id]>1&&nd[id]>0?` ×${nd[id]}`:''}</button>`).join('')}</div>
-      ${pending?`<div class="confirm"><span>Draft <strong>${esc(pending.team)}</strong> (${esc(defOf(pending.sport).short)}) for ${esc(mine?.name)}?</span><button class="btn" data-act="confirmPick">Draft</button><button class="btn ghost" data-act="cancelPick">Cancel</button></div>`:''}
+      ${pickSport==='flex'?`<div class="label">Flex: pick from any sport</div><div class="chips">${flexSports().map(x=>`<button class="chip" data-fsport="${x.id}" aria-pressed="${x.id===flexSport}">${esc(x.short)}</button>`).join('')}</div>`:''}
+      ${pending?`<div class="confirm"><span>Draft <strong>${esc(pending.team)}</strong> (${pending.flex?'Flex · ':''}${esc(defOf(pending.sport).short)}) for ${esc(mine?.name)}?</span><button class="btn" data-act="confirmPick">Draft</button><button class="btn ghost" data-act="cancelPick">Cancel</button></div>`:''}
       ${chooser}</section>`;
   }else if(d.status==='live'){top=`<div class="notice">All picks are in. Finishing up…</div>`}
   else{
@@ -371,19 +424,26 @@ function viewDraft(){
   const board=`<section class="panel"><div class="cardhead"><h3>Rosters</h3>${picks.length&&isCommish?`<button class="btn ghost small" data-act="undo">Undo last pick</button>`:''}</div>
     ${confirmKey==='undo'&&last?`<div class="confirm"><span>Undo ${esc(last.team)} (${esc(mname(last.member))})?</span><button class="btn danger" data-yes="undo">Undo pick</button><button class="btn ghost" data-no>Keep it</button></div>`:''}
     <div class="scroll"><table><tr><th class="l">Name</th>${cols.map(c=>`<th class="l">${esc(c.short)}</th>`).join('')}</tr>
-    ${(d.order?.length?d.order:S.members.map(m=>m.id)).map(id=>`<tr><td class="l">${esc(mname(id))}</td>${cols.map(c=>`<td class="l">${S.picks.filter(p=>p.member===id&&p.sport===c.id).map(p=>esc(p.team)).join('<br>')||'<span class="muted">–</span>'}</td>`).join('')}</tr>`).join('')}</table></div>
+    ${(d.order?.length?d.order:S.members.map(m=>m.id)).map(id=>`<tr><td class="l">${esc(mname(id))}</td>${cols.map(c=>`<td class="l">${S.picks.filter(p=>p.member===id&&(c.id==='flex'?p.flex:p.sport===c.id&&!p.flex)).map(p=>logoImg(p.sport,p.team,'sm')+esc(p.team)+(c.id==='flex'?` <span class="muted small">${esc(defOf(p.sport).short)}</span>`:'')).join('<br>')||'<span class="muted">–</span>'}</td>`).join('')}</tr>`).join('')}</table></div>
     ${picks.length?`<div class="label">Latest picks</div><div class="list">${picks.slice(-5).reverse().map(p=>`<div><span><span class="num muted">#${p.n-(d.base||0)+1}</span> ${esc(mname(p.member))}</span><span>${esc(p.team)} <span class="muted small">${esc(defOf(p.sport)?.short)}</span></span></div>`).join('')}</div>`:''}
   </section>`;
   return top+board;
 }
 function viewScores(){
   const cols=columns(),ro=isCommish?'':' disabled';
-  if(!cols.some(c=>c.id===scoreSport))scoreSport='nfl';
+  if(!cols.some(c=>c.id===scoreSport)||scoreSport==='flex')scoreSport=cols[0]?.id||'nfl';
   const def=defOf(scoreSport),picks=S.picks.filter(p=>p.sport===scoreSport);
-  const chips=`<div class="chips">${cols.map(c=>`<button class="chip" data-ssport="${c.id}" aria-pressed="${c.id===scoreSport}">${esc(c.short)}</button>`).join('')}</div>`;
+  const chips=`<div class="chips">${cols.filter(c=>c.id!=='flex').map(c=>`<button class="chip" data-ssport="${c.id}" aria-pressed="${c.id===scoreSport}">${esc(c.short)}</button>`).join('')}</div>`;
   const auto=['team','table','f1'].includes(def.kind);
   let body;
-  if(!picks.length)body='<div class="notice">No one has drafted in this sport yet.</div>';
+  if(def.kind==='avp'){const evs=S.cfg.avpEvents||[];
+    body=`<div class="list">${evs.map(e=>`<div><span>${esc(e.name)}</span>${isCommish?`<button class="btn ghost small" data-avpdel="${e.id}">Remove</button>`:''}</div>`).join('')||'<p class="small muted">No tournaments chosen yet.</p>'}</div>
+      ${isCommish?`<form class="add" id="addAvp"><input id="newAvp" placeholder="Tournament that counts, e.g. Manhattan Beach Open" aria-label="AVP tournament" maxlength="50"><button class="btn ghost">Add tournament</button></form>`:''}
+      ${picks.map(p=>{const r=S.results[rid(def.id,p.team)]||{},res=r.res||{},sc=groupScore(def,[p]);
+        return `<div class="card"><div class="cardhead"><strong>${esc(p.team)}</strong><span><span class="muted small">${esc(mname(p.member))} · </span><span class="pts">${f1(sc.pts)}</span></span></div>
+         <div class="row">${evs.map(e=>`<label class="field"><span class="label">${esc(e.name)}</span><select id="a-${slug(p.team)}-${e.id}" data-avp="${esc(p.team)}" data-ev="${e.id}"${ro}>${AVP_FIN.map(([v,l,pt])=>`<option value="${v}"${(res[e.id]||'')===v?' selected':''}>${l}${v?` (${pt})`:''}</option>`).join('')}</select></label>`).join('')}</div></div>`}).join('')}
+      <p class="small muted">Each pair earns points at every tournament that counts: 1st 10, 2nd 6, 3rd 4, 5th 3, 7th–9th 1. The commissioner enters finishes after each one.</p>`}
+  else if(!picks.length)body='<div class="notice">No one has drafted in this sport yet.</div>';
   else if(def.kind==='golf'||def.kind==='tennis'){
     body=picks.map(p=>{const r=S.results[rid(def.id,p.team)]||{},vals=(def.kind==='golf'?r.pos:r.res)||['','','',''];
       return `<div class="card"><div class="cardhead"><strong>${esc(p.team)}</strong><span class="muted small">${esc(mname(p.member))}</span></div>
@@ -391,16 +451,16 @@ function viewScores(){
        ${def.events.map((m,i)=>def.kind==='golf'
          ?`<input id="g-${slug(p.team)}-${i}" data-golf="${esc(p.team)}" data-i="${i}" value="${esc(vals[i])}" placeholder="–" aria-label="${m} finish for ${esc(p.team)}"${ro}>`
          :`<select id="t-${slug(p.team)}-${i}" data-tennis="${esc(p.team)}" data-i="${i}" aria-label="${m} result for ${esc(p.team)}"${ro}>${SLAM_RES.map(([v,l])=>`<option value="${v}"${(vals[i]||'')===v?' selected':''}>${l}</option>`).join('')}</select>`).join('')}</div></div>`}).join('')
-      +`<p class="small muted">${def.kind==='golf'?'Enter a finishing place (1, T5, 34), MC for a missed cut, or WD. Blank means that major hasn’t been played. 1 is a win; 2 or T2 is a runner-up.':'Pick how far each player got. Withdrawing or skipping a Slam counts as a 0–1 loss. Blank means that Slam hasn’t happened.'}</p>`}
+      +`<p class="small muted">${def.kind==='golf'?'Enter a finishing place (1, T5, 34). MC, WD or blank scores 0. Points: win 30, 2nd 20, 3rd 16, 4th 14, 5th 12, 6th–10th 10 down to 6, 11th–20th 5, 21st–40th 3, any other made cut 1.':'Pick how far each player got. Each match won is worth '+f1(TENNIS_WIN)+' points; skipping or withdrawing earns nothing. Blank means that Slam hasn’t happened.'}</p>`}
   else body=picks.map(p=>{const r=S.results[rid(scoreSport,p.team)]||{},sc=teamScore(def,p.team);
     const fld=(k,label)=>`<label class="field"><span class="label">${label}</span><input class="n" id="r-${slug(p.team)}-${k}" data-res="${esc(p.team)}" data-k="${k}" value="${esc(r[k]??'')}" inputmode="numeric"${ro}></label>`;
-    return `<div class="card"><div class="cardhead"><strong>${esc(p.team)}</strong><span><span class="muted small">${esc(mname(p.member))} · </span><span class="pts">${f1(sc.pts)}</span></span></div>
+    return `<div class="card"><div class="cardhead"><strong>${logoImg(scoreSport,p.team,'lg')}${esc(p.team)}</strong><span><span class="muted small">${esc(mname(p.member))} · </span><span class="pts">${f1(sc.pts)}</span></span></div>
      <div class="row">${def.kind==='event'?'':def.kind==='f1'?fld('pos','Position')+fld('pts','Points'):fld('w','Wins')+fld('l','Losses')+(def.x?fld('x',def.xName):'')+(def.kind==='table'?fld('pos','Position'):'')}
       ${def.kind==='team'||def.kind==='event'?`<label class="field grow"><span class="label">${def.kind==='event'?'Result':'Postseason'}</span><select id="r-${slug(p.team)}-stage" data-res="${esc(p.team)}" data-k="stage"${ro}>${def.ladder.map((lab,i)=>lab?`<option value="${i}"${(r.stage|0)===i?' selected':''}>${esc(lab)} (+${f1(ladder(i)*(def.kind==='event'?evWeight(def.id):1))})</option>`:'').join('')}</select></label>`:''}</div>
-     ${def.kind==='event'?'':`<div class="small muted">${sc.season?`${def.kind==='f1'?'Ahead of '+Math.round(sc.season/BASE*((Number(S.meta.f1?.teams)||22)-1))+' drivers':(sc.pct??0).toFixed(3).replace(/^0/,'')} → ${f1(sc.season)} season pts`:'No results yet'}${sc.post?` · +${f1(sc.post)} postseason`:''}${sc.best?` · +${f1(sc.best)} best record`:''}</div>`}</div>`}).join('');
-  const doneCtl=auto&&isCommish?`<label class="row small" style="align-items:center;gap:8px"><input type="checkbox" id="done-${def.id}" data-done="${def.id}"${isDone(def.id)?' checked':''}${ro}> Regular season is over (locks in ${def.kind==='team'?'the best-record bonus':'final-position bonuses'})</label>`:'';
+     ${def.kind==='event'?'':`<div class="small muted">${sc.season?`${f1(sc.season)} season pts`:'No results yet'}${sc.post?` · +${f1(sc.post)} postseason`:''}${sc.best?` · +${f1(sc.best)} best record`:''}${sc.spoon?` · −${f1(sc.spoon)} wooden spoon`:''}</div>`}</div>`}).join('');
+  const doneCtl=auto&&isCommish?`<label class="row small" style="align-items:center;gap:8px"><input type="checkbox" id="done-${def.id}" data-done="${def.id}"${isDone(def.id)?' checked':''}${ro}> Regular season is over (locks in ${def.kind==='team'?'the best-record bonus and wooden spoon':'final-position bonuses and penalties'})</label>`:'';
   return `${chips}<section class="panel"><div class="cardhead"><h2>${esc(def.name)}</h2>${auto?`<span class="tag ${isDone(def.id)?'done':'live'}">${isDone(def.id)?'Season over':'Auto-updating'}</span>`:def.when?`<span class="small muted">${esc(def.when)}</span>`:''}</div>
-   <p class="small muted">${def.kind==='event'?'The commissioner sets each country’s result as the event plays out.':'Updates automatically every hour'+(def.kind==='team'?', including playoff rounds':def.kind==='golf'?' once each major finishes':def.kind==='tennis'?' as each Slam plays out':'')+'.'}${isCommish?' As commissioner you can correct anything here; a corrected result stays put until you change it again.':''}</p>
+   <p class="small muted">${def.kind==='avp'?'Choose which tournaments count this season, then enter each pair’s finish.':def.kind==='event'?'The commissioner sets each country’s result as the event plays out.':'Updates automatically every hour'+(def.kind==='team'?', including playoff rounds':def.kind==='golf'?' once each major finishes':def.kind==='tennis'?' as each Slam plays out':'')+'.'}${isCommish?' As commissioner you can correct anything here; a corrected result stays put until you change it again.':''}</p>
    ${doneCtl}${body}</section>`;
 }
 function viewLeague(){
@@ -418,25 +478,31 @@ function viewLeague(){
      ${on?`<label class="field"><span class="label">Weight</span><select id="evw-${e.id}" data-evw="${e.id}"${ro}>${[0.5,1,1.5,2].map(w=>`<option value="${w}"${evWeight(e.id)===w?' selected':''}>${w}×</option>`).join('')}</select></label>`:''}
      <button class="btn ${on?'ghost':''} small" data-evtoggle="${e.id}"${drafted||!isCommish?' disabled':''}>${on?'Turn off':'Add to this year'}</button></span></div>`}).join('');
   const bf=(k,label)=>`<label class="field"><span class="label">${label}</span><input class="n" id="b-${k}" data-bonus="${k}" value="${esc(B(k))}" inputmode="numeric"${ro}></label>`;
-  return members+`
+  const sportsPanel=`<section class="panel"><h2>Sports this season</h2><p class="small muted">Choose which sports are in this season’s draft. ${lock?'The draft has started, so these are locked.':'Set these before you start the draft.'}</p>
+   <div class="chips">${SPORTS.map(x=>`<button class="chip" data-sporton="${x.id}" aria-pressed="${!!S.cfg.sportsOn?.[x.id]}"${lock||!isCommish?' disabled':''}>${esc(x.short)}</button>`).join('')}</div></section>`;
+  return members+sportsPanel+`
   <section class="panel"><h2>Special events</h2><p class="muted small">Turn on the big tournaments that land in your league year. Each person drafts one country or team, scored on the playoff scale (a title is worth ${ladder(5)}). Events added after the main draft get their own mini draft.</p>
    <div>${evs}</div>
    <form class="add" id="addEvent"><input id="newEvent" placeholder="Another event, e.g. Ryder Cup 2027" aria-label="Custom event name" maxlength="40"${ro}><button class="btn ghost"${ro}>Add event</button></form></section>
   <section class="panel rules"><h2>Rulebook</h2>
    <dl>
-    <dt>Season</dt><dd>Win % × 162 for every team sport, counting only regular-season games. Ties and NHL overtime losses count as half a win; Premier League draws as a third. A 12–5 NFL team scores .706 × 162 = 114.4, the same as a 114-win MLB team.</dd>
-    <dt>F1</dt><dd>One driver. Share of the other drivers yours is ahead of in the drivers’ championship × 162. 1st = 162, last = 0.</dd>
-    <dt>Golf</dt><dd>3 golfers × 4 majors. Each finish scores the share of the field beaten; a missed cut counts as beating a quarter of the field. Averaged, × 162. +${B('majorWin')} per major won, +${B('majorRunnerUp')} per runner-up.</dd>
-    <dt>Tennis</dt><dd>2 players × 4 Slams. Combined match record × 162. Withdrawing counts as 0–1. +${B('slamWin')} per Slam title, +${B('slamFinal')} per final lost.</dd>
+    <dt>Season</dt><dd>Everyone starts at 0 and banks points with each regular-season win, worth 162 ÷ games in the season: NFL 9.5, NBA and NHL 2.0, Premier League 4.3, MLB 1. Ties and NHL overtime losses count as half a win; Premier League draws as a third.</dd>
+    <dt>F1</dt><dd>One driver. Banks points race by race from his championship position; 1st place ends the season with 162, last with 0.</dd>
+    <dt>Golf</dt><dd>3 men × 4 majors, scored by finish: win 30, 2nd 20, 3rd 16, 4th 14, 5th 12, 6th–10th 10 down to 6, 11th–20th 5, 21st–40th 3, other made cuts 1. Missed cut, withdrawal or not playing = 0. Ties get the full place (T5 = 5th).</dd>
+    <dt>Tennis</dt><dd>2 men × the Slams in the season. ${f1(TENNIS_WIN)} per match won, +${B('slamWin')} per Slam title, +${B('slamFinal')} per final lost. Not playing earns nothing.</dd>
+    <dt>AVP</dt><dd>One men’s pair and one women’s pair for the season, scored at each tournament the league picks: 1st 10, 2nd 6, 3rd 4, 5th 3, 7th–9th 1.</dd>
+    <dt>Flex</dt><dd>One extra pick from any sport in the season (not AVP), scored on its own like any other pick.</dd>
+    <dt>Wooden spoon</dt><dd>−${B('spoon')} for the worst regular-season record in each league, each relegated Premier League club, and the last-place F1 driver.</dd>
     <dt>Playoffs</dt><dd>+${B('makeIt')} to make it, +${B('perRound')} per round won (a bye counts as a win), +${B('champ')} more for the title. Champion = ${ladder(5)}, runner-up = ${ladder(4)}.</dd>
     <dt>Best record</dt><dd>+${B('best')} for the best regular-season record in the league (split ties all get it). In the Premier League and F1 that’s the champion.</dd>
     <dt>No playoffs</dt><dd>Premier League final table: 1st ${ladder(5)}, 2nd ${ladder(4)}, 3rd–4th ${ladder(3)}, 5th–6th ${ladder(2)}, 7th–10th ${ladder(1)}. F1 drivers’ standings use the same cutoffs.</dd>
-    <dt>Winner</dt><dd>Most total points. Tiebreak: most championships.</dd>
+    <dt>Winner</dt><dd>Most total points. Tiebreaks: most championships, then most playoff points. Every loser buys the winner a Guinness.</dd>
+    <dt>No trades</dt><dd>Picks are final for the season. Injuries are part of the game.</dd>
    </dl>
    <div class="row">
     <label class="field"><span class="label">League year</span><input id="cfgSeason" value="${esc(S.cfg.season)}" style="width:8em"${ro}></label>
     ${bf('makeIt','Make playoffs')}${bf('perRound','Per round')}${bf('champ','Title')}${bf('best','Best record')}
-    ${bf('majorWin','Major win')}${bf('majorRunnerUp','Major 2nd')}${bf('slamWin','Slam title')}${bf('slamFinal','Slam final')}
+    ${bf('spoon','Wooden spoon')}${bf('slamWin','Slam title')}${bf('slamFinal','Slam final')}
    </div></section>
   ${commishPanel()}
   ${isCommish&&(S.members.some(m=>m.test)||S.picks.length)?`<section class="panel"><h3>Wipe the test</h3><p class="small muted">Deletes every pick, removes the test drafters, undoes manual score changes and puts the draft back in setup. Real people you added stay.</p><div><button class="btn danger" data-act="wipeTest">Wipe test data</button></div>
@@ -486,24 +552,34 @@ async function setDraft(d){S.draft=d;render();try{await db.doc('draft/main').set
 async function makePick(){
   const d=D(),i=draftPicks().length,mid=onClock(i),p=pending;pending=null;if(!p||!mid)return;
   if(takenMap(p.sport)[slug(p.team)]){render();return toast(p.team+' is already taken.')}
-  if((need(mid)[p.sport]||0)<1){render();return toast(mname(mid)+' already has their '+defOf(p.sport).short+' picks.')}
+  const slotKey=p.flex?'flex':p.sport;
+  if((need(mid)[slotKey]||0)<1){render();return toast(mname(mid)+' already has their '+defOf(slotKey).short+' pick.')}
   const n=nextN(),ref=db.doc('picks/'+pid(n));
   try{const ex=await ref.get();if(ex.exists){toast('Someone just made that pick. The board has refreshed.');render();return}
-    const doc={n,member:mid,sport:p.sport,team:p.team,at:new Date().toISOString()};
+    const doc={n,member:mid,sport:p.sport,team:p.team,at:new Date().toISOString(),...(p.flex?{flex:true}:{})};
     S.picks.push(doc);render();await ref.set(doc);
     const finished=i+1>=d.order.length*slotsTotal(d.slots);
     await setDraft({...D(),status:finished?'done':'live',clockStart:doc.at,paused:false,pausedElapsed:0});
   }catch(e){fail(e)}
 }
 
+function bestAvailable(openSports){
+  const ids=openSports.includes('flex')?[...new Set([...openSports.filter(x=>x!=='flex'),...flexSports().map(x=>x.id)])]:openSports;
+  const rows=[];for(const id of ids){const def=defOf(id);if(!def.teams)continue;const tk=takenMap(id);
+    for(const t of teamList(def))if(!tk[slug(t)]){const pp=projPts(def,t);if(pp!=null)rows.push({id,t,pp,short:def.short})}}
+  if(!rows.length)return '';rows.sort((a,b)=>b.pp-a.pp);
+  return `<section class="panel"><div class="label">Best available for the sports they still need</div><div class="list">${rows.slice(0,5).map(x=>
+    `<div><span>${logoImg(x.id,x.t,'sm')}${esc(x.t)} <span class="muted small">${esc(x.short)}</span></span><span class="num">Proj ${Math.round(x.pp)}</span></div>`).join('')}</div>
+    <p class="small muted">Golf and tennis don’t have projections; pick on gut and form.</p></section>`;
+}
 let autoRunning=false;
 async function autoPick(){
   const d=D(),i=draftPicks().length;if(d.status!=='live'||i>=d.order.length*slotsTotal(d.slots))return false;
   const mid=onClock(i),nd=need(mid),open=Object.keys(nd).filter(k=>nd[k]>0);if(!open.length)return false;
-  const sport=open[Math.floor(Math.random()*open.length)],def=defOf(sport),tk=takenMap(sport);
+  const slot=open[Math.floor(Math.random()*open.length)],sport=slot==='flex'?flexSports()[Math.floor(Math.random()*flexSports().length)].id:slot,def=defOf(sport),tk=takenMap(sport);
   let options=(def.teams?teamList(def):poolOf(def)).filter(t=>!tk[slug(t)]);
   if(!options.length){let k=1;while(tk[slug('Test pick '+k)])k++;options=['Test pick '+k]}
-  pending={sport,team:options[Math.floor(Math.random()*options.length)]};
+  pending={sport,team:options[Math.floor(Math.random()*options.length)],flex:slot==='flex'};
   await makePick();return true;
 }
 
@@ -515,7 +591,8 @@ $('#view').addEventListener('click',async e=>{
   if(ds.open){openRow=openRow===ds.open?null:ds.open;render();return}
   if(ds.ssport){scoreSport=ds.ssport;render();return}
   if(ds.psport){pickSport=ds.psport;pending=null;render();return}
-  if(ds.pick){pending={sport:pickSport,team:ds.pick};render();return}
+  if(ds.fsport){flexSport=ds.fsport;pending=null;render();return}
+  if(ds.pick){pending={sport:chooserSport(),team:ds.pick,flex:pickSport==='flex'};render();return}
   if(ds.no!==undefined){confirmKey=null;render();return}
   if(ds.act==='commishIn'){try{await AUTH.signIn();toast(isCommish?'Signed in as commissioner.':'That account isn’t the commissioner.')}catch(err){if(err?.code!=='auth/popup-closed-by-user')toast(err?.code==='auth/unauthorized-domain'?'Add this site under Firebase → Authentication → Settings → Authorized domains.':'Sign-in didn’t work. Try again.')}render();return}
   if(ds.act==='commishOut'){await AUTH.signOut();return}
@@ -527,16 +604,18 @@ $('#view').addEventListener('click',async e=>{
   if(ds.unclaim){const m=S.members.find(x=>x.id===ds.unclaim);delete m.uid;render();try{await db.doc('members/'+m.id).set({name:m.name,order:m.order})}catch(err){fail(err)}return}
   if(ds.del){confirmKey='del:'+ds.del;render();return}
   if(ds.evdraft){confirmKey='ev:'+ds.evdraft;render();return}
+  if(ds.sporton){S.cfg.sportsOn={...S.cfg.sportsOn,[ds.sporton]:!S.cfg.sportsOn?.[ds.sporton]};saveCfg();render();return}
+  if(ds.avpdel){S.cfg.avpEvents=(S.cfg.avpEvents||[]).filter(e=>e.id!==ds.avpdel);saveCfg();render();return}
   if(ds.evtoggle){const id=ds.evtoggle,cur=S.cfg.events?.[id];S.cfg.events={...S.cfg.events,[id]:{active:!cur?.active,weight:cur?.weight||1}};saveCfg();render();return}
   if(ds.yes){const k=ds.yes;confirmKey=null;
-    if(k==='start'){const now=new Date().toISOString();return setDraft({status:'live',order:draftOrder(),slots:mainSlots(),base:nextN(),startedAt:now,clockStart:now,pickSeconds:D().pickSeconds??120,paused:false})}
+    if(k==='start'){const now=new Date().toISOString();return setDraft({status:'live',order:draftOrder(),slots:mainSlots(),base:nextN(),startedAt:now,clockStart:now,pickSeconds:D().pickSeconds??119.5,paused:false})}
     if(k==='undo'){const last=draftPicks().at(-1);if(!last)return;S.picks=S.picks.filter(p=>p!==last);S.draft={...D(),status:'live',clockStart:new Date().toISOString(),paused:false,pausedElapsed:0};render();
       try{await db.doc('picks/'+pid(last.n)).delete();await db.doc('draft/main').set(S.draft)}catch(err){fail(err)}return}
     if(k.startsWith('del:')){const id=k.slice(4);S.members=S.members.filter(m=>m.id!==id);render();try{await db.doc('members/'+id).delete()}catch(err){fail(err)}return}
-    if(k.startsWith('ev:')){const id=k.slice(3),now=new Date().toISOString();return setDraft({status:'live',order:standings().map(r=>r.m.id).reverse(),slots:{[id]:1},base:nextN(),startedAt:now,clockStart:now,pickSeconds:D().pickSeconds??120,paused:false})}
+    if(k.startsWith('ev:')){const id=k.slice(3),now=new Date().toISOString();return setDraft({status:'live',order:standings().map(r=>r.m.id).reverse(),slots:{[id]:1},base:nextN(),startedAt:now,clockStart:now,pickSeconds:D().pickSeconds??119.5,paused:false})}
     if(k==='wipeTest'){autoRunning=false;const picks=[...S.picks],testers=S.members.filter(m=>m.test),manual=Object.keys(S.results).filter(id=>S.results[id].manual);
       S.picks=[];S.members=S.members.filter(m=>!m.test);manual.forEach(id=>delete S.results[id]);S.cfg.done={};saveCfg();
-      S.draft={status:'setup',order:draftOrder(),pickSeconds:D().pickSeconds??120};render();
+      S.draft={status:'setup',order:draftOrder(),pickSeconds:D().pickSeconds??119.5};render();
       try{for(const p of picks)await db.doc('picks/'+pid(p.n)).delete();for(const m of testers)await db.doc('members/'+m.id).delete();
         for(const id of manual)await db.doc('results/'+id).delete();await db.doc('draft/main').set(S.draft);toast('Test wiped. Ready for the real draft.')}catch(err){fail(err)}return}
     if(k==='resetScores'){const ids=Object.keys(S.results).filter(id=>S.results[id].manual);
@@ -556,17 +635,19 @@ $('#view').addEventListener('click',async e=>{
   if(ds.act==='addTesters'){let order=S.members.reduce((a,m)=>Math.max(a,m.order||0),0);const n0=S.members.filter(m=>m.test).length;
     try{for(let k=1;k<=4;k++){const ref=db.collection('members').doc(),m={name:'Test '+(n0+k),order:++order,test:true};S.members.push({id:ref.id,...m});await ref.set(m)}render();toast('Added 4 test drafters.')}catch(err){fail(err)}return}
   if(ds.act==='autoPick'){await autoPick();return}
-  if(ds.act==='autoAll'){autoRunning=!autoRunning;if(autoRunning){toast('Auto-drafting… tap again to stop.');while(autoRunning&&D().status==='live'&&draftPicks().length<D().order.length*slotsTotal(D().slots)){if(!await autoPick())break;await new Promise(r=>setTimeout(r,250))}autoRunning=false;render()}return}
+  if(ds.act==='autoAll'){autoRunning=!autoRunning;render();if(autoRunning){toast('Auto-drafting… tap Stop to pause it.');while(autoRunning&&D().status==='live'&&draftPicks().length<D().order.length*slotsTotal(D().slots)){if(!await autoPick())break;await new Promise(r=>setTimeout(r,250))}autoRunning=false;render()}return}
   if(ds.act==='cancelPick'){pending=null;render();return}
   if(ds.act==='confirmPick'){makePick();return}
 });
 $('#view').addEventListener('submit',async e=>{e.preventDefault();if(!canWrite)return;const f=e.target;
   if(f.id!=='freePick'&&!isCommish)return;
-  if(f.id==='freePick'){const v=$('#freeInput').value.trim();if(!v)return;const def=defOf(pickSport);
-    const pool=poolOf(def);pending={sport:pickSport,team:pool.find(x=>slug(x)===slug(v))||v};render();return}
+  if(f.id==='freePick'){const v=$('#freeInput').value.trim();if(!v)return;const def=defOf(chooserSport());
+    const pool=poolOf(def);pending={sport:def.id,team:pool.find(x=>slug(x)===slug(v))||v,flex:pickSport==='flex'};render();return}
   if(f.id==='addMember'){const name=$('#newMember').value.trim();if(!name)return;
     const order=S.members.reduce((a,m)=>Math.max(a,m.order||0),0)+1,ref=db.collection('members').doc();
     S.members.push({id:ref.id,name,order});render();$('#newMember')?.focus();try{await ref.set({name,order})}catch(err){fail(err)}return}
+  if(f.id==='addAvp'){const name=$('#newAvp').value.trim();if(!name)return;const id='t'+Date.now().toString(36);
+    S.cfg.avpEvents=[...(S.cfg.avpEvents||[]),{id,name}];saveCfg();render();return}
   if(f.id==='addEvent'){const name=$('#newEvent').value.trim();if(!name)return;const id='x-'+slug(name).slice(0,30);
     if(eventList().some(x=>x.id===id))return toast('That event is already on the list.');
     S.cfg.customEvents=[...(S.cfg.customEvents||[]),{id,name}];S.cfg.events={...S.cfg.events,[id]:{active:true,weight:1}};saveCfg();render()}
@@ -580,12 +661,16 @@ function onField(e){const t=e.target;if(!isCommish)return;
   if(t.dataset.evw){S.cfg.events={...S.cfg.events,[t.dataset.evw]:{...S.cfg.events[t.dataset.evw],weight:Number(t.value)}};saveCfg();render();return}
   if(t.dataset.res!==undefined){saveResult(scoreSport,t.dataset.res,r=>{r[t.dataset.k]=t.value===''?'':Number(t.value)});if(t.tagName==='SELECT')render();return}
   if(t.dataset.golf!==undefined){saveResult('golf',t.dataset.golf,r=>{const a=[...(r.pos||['','','',''])];a[+t.dataset.i]=t.value.trim();r.pos=a});return}
+  if(t.dataset.avp!==undefined){saveResult(scoreSport,t.dataset.avp,r=>{r.res={...(r.res||{}),[t.dataset.ev]:t.value}});render();return}
   if(t.dataset.tennis!==undefined){saveResult('tennis',t.dataset.tennis,r=>{const a=[...(r.res||['','','',''])];a[+t.dataset.i]=t.value;r.res=a});render()}
 }
 $('#view').addEventListener('input',e=>{if(e.target.tagName==='INPUT'&&e.target.type!=='checkbox')onField(e)});
-$('#view').addEventListener('change',e=>{if(e.target.tagName==='SELECT'||e.target.type==='checkbox')onField(e)});
+$('#view').addEventListener('change',e=>{
+  if(e.target.dataset.draftsort!==undefined){draftSort=e.target.value;try{localStorage.setItem('gg-sort',draftSort)}catch(_){}render();return}
+  if(e.target.tagName==='SELECT'||e.target.type==='checkbox')onField(e)});
 
 /* ================= Live data ================= */
+window.addEventListener('pageshow',e=>{if(e.persisted)location.reload()});
 try{tab=localStorage.getItem('gg-tab')||tab}catch(_){}
 if(!['standings','draft','scores','league'].includes(tab))tab='standings';
 function rerender(){const a=document.activeElement;if(a&&a.closest?.('#view')&&a.matches('input,select'))return;render()}
@@ -599,7 +684,7 @@ function rerender(){const a=document.activeElement;if(a&&a.closest?.('#view')&&a
   db.collection('members').orderBy('order').onSnapshot(s=>{S.members=s.docs.map(d=>({id:d.id,...d.data()}));done(s);rerender()},e=>{done();fail(e)});
   db.collection('picks').onSnapshot(s=>{S.picks=s.docs.map(d=>({...d.data()})).filter(p=>typeof p.n==='number').sort((a,b)=>a.n-b.n);done(s);rerender()},e=>{done();fail(e)});
   db.doc('draft/main').onSnapshot(s=>{S.draft=s.exists?{...s.data()}:{status:'setup',order:[]};done(s);rerender()},e=>{done();fail(e)});
-  db.doc('config/main').onSnapshot(s=>{if(!dirty.cfg){const d=s.exists?structuredClone(s.data()):{};S.cfg={...structuredClone(DEF_CFG),...d,bonus:{...DEF_BONUS,...(d.bonus||{})}}}done(s);rerender()},e=>{done();fail(e)});
+  db.doc('config/main').onSnapshot(s=>{if(!dirty.cfg){const d=s.exists?structuredClone(s.data()):{};S.cfg={...structuredClone(DEF_CFG),...d,bonus:{...DEF_BONUS,...(d.bonus||{})},sportsOn:d.sportsOn||structuredClone(DEF_CFG.sportsOn)}}done(s);rerender()},e=>{done();fail(e)});
   db.collection('results').onSnapshot(s=>{const next={};s.docs.forEach(d=>next[d.id]=structuredClone(d.data()));for(const k in S.results)if(dirty[k])next[k]=S.results[k];S.results=next;rerender()},fail);
   db.collection('meta').onSnapshot(s=>{S.meta={};s.docs.forEach(d=>S.meta[d.id]=d.data());rerender()},()=>{});
   db.doc('sync/main').onSnapshot(s=>{S.sync=s.exists?s.data():null;rerender()},()=>{});

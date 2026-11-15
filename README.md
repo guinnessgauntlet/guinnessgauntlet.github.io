@@ -92,12 +92,14 @@ Everyone else can view the league and make draft picks, but can't change scores 
 
 ## Scoring summary
 
-- **Season:** win % × 162. NFL ties and NHL OT losses count as half a win, Premier League draws as a third.
-- **F1:** one driver. Share of the other drivers yours finishes ahead of in the standings × 162.
-- **Golf:** 3 golfers × 4 majors. Share of the field beaten, averaged, × 162. +10 per major win, +5 per runner-up.
-- **Tennis:** 2 players × 4 Slams. Combined match record × 162. +10 per title, +5 per final lost.
-- **Playoffs:** +5 to make it, +5 per round won (a bye counts as a round won), +10 more for the title. Champion = 35.
-- **Best regular-season record:** +10.
-- **Premier League and F1 final standings:** 1st 35, 2nd 20, 3rd–4th 15, 5th–6th 10, 7th–10th 5.
+- **Seasons:** everyone starts at 0. Each regular-season win is worth 162 ÷ the league's season length (NFL 9.5, NBA/NHL 2.0, Premier League 4.3, MLB 1). Ties and NHL OT losses count as half a win, Premier League draws as a third.
+- **F1:** one driver; banks points race by race from championship position (1st ends the year at 162).
+- **Golf:** 3 men x 4 majors, by finish: win 30, 2nd 20, 3rd 16, 4th 14, 5th 12, 6th-10th 10 down to 6, 11th-20th 5, 21st-40th 3, other made cuts 1. Missed cut, WD or didn't play = 0.
+- **Tennis:** 2 men; about 2.9 per Slam match won, +10 per title, +5 per final lost.
+- **AVP:** one men's pair and one women's pair per season, scored at the tournaments the league picks: 1st 10, 2nd 6, 3rd 4, 5th 3, 7th-9th 1.
+- **Flex:** one extra pick from any sport in the season (not AVP).
+- **Playoffs:** +5 to make it, +5 per round won (a bye counts), +10 more for the title. Champion = 35.
+- **Best record:** +10. **Wooden spoon:** -10 for the worst record in each league, each relegated Premier League club, and the last F1 driver.
+- **Winner:** most points; tiebreaks are most championships, then most playoff points. Every loser buys the winner a Guinness.
 
-All bonus values can be changed on the **League** tab.
+Bonus values can be changed on the League tab. Choose which sports are in each season on the League tab before the draft.
