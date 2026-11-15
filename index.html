@@ -185,6 +185,7 @@ const SLAM_WL={R128:[0,1],R64:[1,1],R32:[2,1],R16:[3,1],QF:[4,1],SF:[5,1],F:[6,1
 const KO=['Out in group stage','Lost Round of 16','Lost quarterfinal','Lost semifinal','Lost final','Champions'];
 const MEDAL=['Outside top 20 in medals','11th–20th in medals','6th–10th in medals','4th–5th in medals','2nd–3rd in medals','Top of the medal table'];
 const EVENTS=[
+ {id:'mc26',name:'Mosconi Cup 2026',short:'Mosconi',when:'Nov 27–30, 2026 · Orlando · pick one player',pool:[],pickLabel:'Type a player',ladder:['Losing team, 0–1 match wins','Losing team, 2+ match wins','Winning team, 0–1 match wins','Winning team, 2 match wins','Winning team, 3+ match wins','Winning team MVP']},
  {id:'wwc27',name:"Women's World Cup 2027",short:'WWC',when:'Jun–Jul 2027 · Brazil',ladder:KO},
  {id:'rwc27',name:'Rugby World Cup 2027',short:'RWC',when:'Oct–Nov 2027 · Australia',ladder:KO},
  {id:'cwc27',name:'Cricket World Cup 2027',short:'CWC',when:'Oct–Nov 2027 · southern Africa',ladder:['Out in group stage','Out in Super Six',null,'Lost semifinal','Lost final','Champions']},
@@ -225,6 +226,9 @@ function teamList(sp){ // prefer names written by the score updater so picks mat
   const fromFeed=Object.values(S.results).filter(r=>r.sport===sp.id&&r.feed).map(r=>r.team);
   return (fromFeed.length>=sp.teams.length*0.8?fromFeed:sp.teams).slice().sort((a,b)=>a.localeCompare(b));
 }
+
+const poolOf=def=>def.kind==='golf'?GOLFERS:def.kind==='tennis'?TENNIS:def.pool||COUNTRIES;
+const pickPrompt=def=>def.kind==='golf'?'Type a golfer':def.kind==='tennis'?'Type a tennis player':def.pickLabel||'Type a country or team';
 
 /* ================= Scoring ================= */
 // Postseason ladder: 0 missed · 1 made it · 2 won a round · 3 won two · 4 lost final · 5 champion
@@ -320,11 +324,11 @@ function viewDraft(){
     const order=draftOrder(),sl=mainSlots(),per=slotsTotal(sl),tooMany=S.members.length>MAX_PEOPLE;
     return `<section class="panel"><h2>Draft setup</h2>
      <p class="muted">Snake draft. On your turn, take any team or player from any sport you still need. Everyone ends with one NFL, NBA, NHL, MLB, Premier League team, one F1 driver, three golfers and two tennis players${activeEvents().length?', plus one pick per special event':''}: ${per} picks each.</p>
-     ${S.members.length<2?`<div class="notice">Add at least two people on the League tab first.</div><div><button class="btn ghost" data-go="league">Go to League</button></div>`:`
+     ${S.members.length<2?`<div class="notice">Add at least two people on the League tab first${isCommish?', or add test drafters to try it out':''}.</div><div class="row"><button class="btn ghost" data-go="league">Go to League</button>${isCommish?'<button class="btn ghost" data-act="addTesters">Add 4 test drafters</button>':''}</div>`:`
      <div class="label">Draft order</div>
      <div class="list">${order.map((id,i)=>`<div><span><span class="num muted">${i+1}.</span> ${esc(mname(id))}</span><span class="row"><button class="btn ghost small" data-move="${i}:-1" aria-label="Move up"${i===0||!isCommish?' disabled':''}>↑</button><button class="btn ghost small" data-move="${i}:1" aria-label="Move down"${i===order.length-1||!isCommish?' disabled':''}>↓</button></span></div>`).join('')}</div>
      <label class="field" style="max-width:220px"><span class="label">Pick timer</span><select id="pickSeconds" data-pickseconds${ro}>${[[0,'No timer'],[30,'30 seconds'],[60,'1 minute'],[90,'90 seconds'],[120,'2 minutes'],[180,'3 minutes'],[300,'5 minutes']].map(([v,l])=>`<option value="${v}"${(d.pickSeconds??120)===v?' selected':''}>${l}</option>`).join('')}</select></label>
-     <div class="row"><button class="btn ghost" data-act="shuffle"${ro}>Shuffle order</button><button class="btn" data-act="start"${tooMany||!isCommish?' disabled':''}>Start the draft</button></div>
+     <div class="row"><button class="btn ghost" data-act="shuffle"${ro}>Shuffle order</button>${isCommish?'<button class="btn ghost" data-act="addTesters">Add 4 test drafters</button>':''}<button class="btn" data-act="start"${tooMany||!isCommish?' disabled':''}>Start the draft</button></div>
      ${isCommish?'':'<p class="small muted">The commissioner sets the order and starts the draft.</p>'}
      ${tooMany?`<p class="small" style="color:var(--bad)">The Premier League has 20 clubs, so the Gauntlet tops out at ${MAX_PEOPLE} people.</p>`:''}
      ${confirmKey==='start'?`<div class="confirm"><span>Start the draft with this order?</span><button class="btn" data-yes="start">Start</button><button class="btn ghost" data-no>Not yet</button></div>`:''}`}
@@ -339,14 +343,15 @@ function viewDraft(){
     let chooser;
     if(def.teams){chooser=`<div class="grid">${teamList(def).map(t=>{const own=tk[slug(t)],r=S.results[rid(def.id,t)];
       return `<button class="team" data-pick="${esc(t)}"${own||!canWrite?' disabled':''}>${esc(t)}<small>${own?esc(mname(own)):r?record(def,r):''}</small></button>`}).join('')}</div>`}
-    else{const pool=def.kind==='golf'?GOLFERS:def.kind==='tennis'?TENNIS:COUNTRIES,sugg=pool.filter(x=>!tk[slug(x)]);
-      chooser=`<form class="add" id="freePick"><input id="freeInput" list="freeList" placeholder="${def.kind==='golf'?'Type a golfer':def.kind==='tennis'?'Type a tennis player':'Type a country or team'}" aria-label="Pick" maxlength="60" autocomplete="off"${canWrite?'':' disabled'}><datalist id="freeList">${sugg.map(x=>`<option value="${esc(x)}">`).join('')}</datalist><button class="btn"${canWrite?'':' disabled'}>Draft</button></form>
+    else{const pool=poolOf(def),sugg=pool.filter(x=>!tk[slug(x)]);
+      chooser=`<form class="add" id="freePick"><input id="freeInput" list="freeList" placeholder="${pickPrompt(def)}" aria-label="Pick" maxlength="60" autocomplete="off"${canWrite?'':' disabled'}><datalist id="freeList">${sugg.map(x=>`<option value="${esc(x)}">`).join('')}</datalist><button class="btn"${canWrite?'':' disabled'}>Draft</button></form>
        ${Object.keys(tk).length?`<p class="small muted">Taken: ${S.picks.filter(p=>p.sport===pickSport).map(p=>esc(p.team)+' ('+esc(mname(p.member))+')').join(', ')}</p>`:''}`}
     const nextUp=[1,2].map(k=>i+k<total?esc(mname(onClock(i+k))):null).filter(Boolean);
     top=`<div class="clock"><div class="clockrow"><div><span class="label" style="color:inherit;opacity:.7">On the clock · Pick ${i+1} of ${total} · Round ${Math.floor(i/N)+1}</span>
       <div class="who">${esc(mine?.name||'?')} ${mine?.uid&&mine.uid===me?'<span class="you">You</span>':''}</div>
       <div class="meta">${nextUp.length?'Then: '+nextUp.join(', '):'Last pick of the draft'}</div></div>
       ${d.pickSeconds?`<div class="timer" id="timer">${PINT}<div><div class="tleft" id="tLeft">–:––</div><div class="tsub" id="tSub">to pick</div></div></div>`:''}</div>
+      ${isCommish?`<div class="tctl"><button class="btn ghost small" data-act="autoPick">Auto-pick for ${esc(mine?.name||'them')}</button><button class="btn ghost small" data-act="autoAll">Auto-draft the rest</button></div>`:''}
       ${d.pickSeconds&&isCommish?`<div class="tctl"><button class="btn ghost small" data-act="${d.paused?'resume':'pause'}">${d.paused?'Resume clock':'Pause clock'}</button><button class="btn ghost small" data-act="resetClock">Restart clock</button></div>`:''}</div>
      <section class="panel"><div class="label">Still needs</div>
       <div class="chips">${Object.keys(d.slots).map(id=>`<button class="chip" data-psport="${id}" aria-pressed="${id===pickSport}"${nd[id]>0?'':' disabled'}>${esc(defOf(id).short)}${d.slots[id]>1&&nd[id]>0?` ×${nd[id]}`:''}</button>`).join('')}</div>
@@ -434,6 +439,10 @@ function viewLeague(){
     ${bf('majorWin','Major win')}${bf('majorRunnerUp','Major 2nd')}${bf('slamWin','Slam title')}${bf('slamFinal','Slam final')}
    </div></section>
   ${commishPanel()}
+  ${isCommish&&(S.members.some(m=>m.test)||S.picks.length)?`<section class="panel"><h3>Wipe the test</h3><p class="small muted">Deletes every pick, removes the test drafters, undoes manual score changes and puts the draft back in setup. Real people you added stay.</p><div><button class="btn danger" data-act="wipeTest">Wipe test data</button></div>
+   ${confirmKey==='wipeTest'?`<div class="confirm"><span>Delete all ${S.picks.length} picks and ${S.members.filter(m=>m.test).length} test drafters?</span><button class="btn danger" data-yes="wipeTest">Wipe it</button><button class="btn ghost" data-no>Cancel</button></div>`:''}</section>`:''}
+  ${isCommish?`<section class="panel"><h3>Reset scores to automatic</h3><p class="small muted">Undoes every manual score correction and every “season is over” override, so the hourly update takes over again. Use this after testing. Records refill within the hour.</p><div><button class="btn ghost" data-act="resetScores">Reset scores</button></div>
+   ${confirmKey==='resetScores'?`<div class="confirm"><span>Remove all manual score changes?</span><button class="btn danger" data-yes="resetScores">Reset scores</button><button class="btn ghost" data-no>Cancel</button></div>`:''}</section>`:''}
   ${lock&&isCommish?`<section class="panel"><h3>Start over</h3><p class="small muted">Deletes every pick and sends the draft back to setup. Scores stay.</p><div><button class="btn danger" data-act="reset">Clear all picks</button></div>
    ${confirmKey==='reset'?`<div class="confirm"><span>Delete all ${S.picks.length} picks? This can’t be undone.</span><button class="btn danger" data-yes="reset">Delete picks</button><button class="btn ghost" data-no>Cancel</button></div>`:''}</section>`:''}`;
 }
@@ -487,6 +496,17 @@ async function makePick(){
   }catch(e){fail(e)}
 }
 
+let autoRunning=false;
+async function autoPick(){
+  const d=D(),i=draftPicks().length;if(d.status!=='live'||i>=d.order.length*slotsTotal(d.slots))return false;
+  const mid=onClock(i),nd=need(mid),open=Object.keys(nd).filter(k=>nd[k]>0);if(!open.length)return false;
+  const sport=open[Math.floor(Math.random()*open.length)],def=defOf(sport),tk=takenMap(sport);
+  let options=(def.teams?teamList(def):poolOf(def)).filter(t=>!tk[slug(t)]);
+  if(!options.length){let k=1;while(tk[slug('Test pick '+k)])k++;options=['Test pick '+k]}
+  pending={sport,team:options[Math.floor(Math.random()*options.length)]};
+  await makePick();return true;
+}
+
 /* ================= Events ================= */
 document.querySelector('nav').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.tab;confirmKey=null;pending=null;render();try{localStorage.setItem('gg-tab',tab)}catch(_){}});
 $('#view').addEventListener('click',async e=>{
@@ -514,6 +534,14 @@ $('#view').addEventListener('click',async e=>{
       try{await db.doc('picks/'+pid(last.n)).delete();await db.doc('draft/main').set(S.draft)}catch(err){fail(err)}return}
     if(k.startsWith('del:')){const id=k.slice(4);S.members=S.members.filter(m=>m.id!==id);render();try{await db.doc('members/'+id).delete()}catch(err){fail(err)}return}
     if(k.startsWith('ev:')){const id=k.slice(3),now=new Date().toISOString();return setDraft({status:'live',order:standings().map(r=>r.m.id).reverse(),slots:{[id]:1},base:nextN(),startedAt:now,clockStart:now,pickSeconds:D().pickSeconds??120,paused:false})}
+    if(k==='wipeTest'){autoRunning=false;const picks=[...S.picks],testers=S.members.filter(m=>m.test),manual=Object.keys(S.results).filter(id=>S.results[id].manual);
+      S.picks=[];S.members=S.members.filter(m=>!m.test);manual.forEach(id=>delete S.results[id]);S.cfg.done={};saveCfg();
+      S.draft={status:'setup',order:draftOrder(),pickSeconds:D().pickSeconds??120};render();
+      try{for(const p of picks)await db.doc('picks/'+pid(p.n)).delete();for(const m of testers)await db.doc('members/'+m.id).delete();
+        for(const id of manual)await db.doc('results/'+id).delete();await db.doc('draft/main').set(S.draft);toast('Test wiped. Ready for the real draft.')}catch(err){fail(err)}return}
+    if(k==='resetScores'){const ids=Object.keys(S.results).filter(id=>S.results[id].manual);
+      S.cfg.done={};saveCfg();for(const id of ids)delete S.results[id];render();
+      try{for(const id of ids)await db.doc('results/'+id).delete();toast(`Scores reset. ${ids.length} corrections removed.`)}catch(err){fail(err)}return}
     if(k==='reset'){const all=[...S.picks];S.picks=[];render();try{for(const p of all)await db.doc('picks/'+pid(p.n)).delete();await db.doc('draft/main').set({status:'setup',order:draftOrder()});toast('All picks cleared.')}catch(err){fail(err)}return}
     return}
   if(ds.act==='shuffle'){const o=draftOrder();for(let i=o.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[o[i],o[j]]=[o[j],o[i]]}return setDraft({...D(),status:'setup',order:o})}
@@ -523,13 +551,19 @@ $('#view').addEventListener('click',async e=>{
   if(ds.act==='resetClock')return setDraft({...D(),paused:false,pausedElapsed:0,clockStart:new Date().toISOString()});
   if(ds.act==='undo'){confirmKey='undo';render();return}
   if(ds.act==='reset'){confirmKey='reset';render();return}
+  if(ds.act==='resetScores'){confirmKey='resetScores';render();return}
+  if(ds.act==='wipeTest'){confirmKey='wipeTest';render();return}
+  if(ds.act==='addTesters'){let order=S.members.reduce((a,m)=>Math.max(a,m.order||0),0);const n0=S.members.filter(m=>m.test).length;
+    try{for(let k=1;k<=4;k++){const ref=db.collection('members').doc(),m={name:'Test '+(n0+k),order:++order,test:true};S.members.push({id:ref.id,...m});await ref.set(m)}render();toast('Added 4 test drafters.')}catch(err){fail(err)}return}
+  if(ds.act==='autoPick'){await autoPick();return}
+  if(ds.act==='autoAll'){autoRunning=!autoRunning;if(autoRunning){toast('Auto-drafting… tap again to stop.');while(autoRunning&&D().status==='live'&&draftPicks().length<D().order.length*slotsTotal(D().slots)){if(!await autoPick())break;await new Promise(r=>setTimeout(r,250))}autoRunning=false;render()}return}
   if(ds.act==='cancelPick'){pending=null;render();return}
   if(ds.act==='confirmPick'){makePick();return}
 });
 $('#view').addEventListener('submit',async e=>{e.preventDefault();if(!canWrite)return;const f=e.target;
   if(f.id!=='freePick'&&!isCommish)return;
   if(f.id==='freePick'){const v=$('#freeInput').value.trim();if(!v)return;const def=defOf(pickSport);
-    const pool=def.kind==='golf'?GOLFERS:def.kind==='tennis'?TENNIS:COUNTRIES;pending={sport:pickSport,team:pool.find(x=>slug(x)===slug(v))||v};render();return}
+    const pool=poolOf(def);pending={sport:pickSport,team:pool.find(x=>slug(x)===slug(v))||v};render();return}
   if(f.id==='addMember'){const name=$('#newMember').value.trim();if(!name)return;
     const order=S.members.reduce((a,m)=>Math.max(a,m.order||0),0)+1,ref=db.collection('members').doc();
     S.members.push({id:ref.id,name,order});render();$('#newMember')?.focus();try{await ref.set({name,order})}catch(err){fail(err)}return}
