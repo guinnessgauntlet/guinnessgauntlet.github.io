@@ -304,6 +304,7 @@ function projPts(sp,team){
   return (cur==null?base:(gp*cur+k*base)/(gp+k))*BASE}
 function projRanks(sp){const list=teamList(sp).map(t=>[t,projPts(sp,t)??0]).sort((a,b)=>b[1]-a[1]);const m={};list.forEach(([t],i)=>m[slug(t)]=i+1);return m}
 let draftSort='proj',flexSport='nfl';
+const showProj=()=>S.cfg.showProj!==false;
 const chooserSport=()=>pickSport==='flex'?flexSport:pickSport;
 try{draftSort=localStorage.getItem('gg-sort')||'proj'}catch(_){}
 
@@ -373,6 +374,7 @@ function viewDraft(){
      ${S.members.length<2?`<div class="notice">Add at least two people on the League tab first${isCommish?', or add test drafters to try it out':''}.</div><div class="row"><button class="btn ghost" data-go="league">Go to League</button>${isCommish?'<button class="btn ghost" data-act="addTesters">Add 4 test drafters</button>':''}</div>`:`
      <div class="label">Draft order</div>
      <div class="list">${order.map((id,i)=>`<div><span><span class="num muted">${i+1}.</span> ${esc(mname(id))}</span><span class="row"><button class="btn ghost small" data-move="${i}:-1" aria-label="Move up"${i===0||!isCommish?' disabled':''}>↑</button><button class="btn ghost small" data-move="${i}:1" aria-label="Move down"${i===order.length-1||!isCommish?' disabled':''}>↓</button></span></div>`).join('')}</div>
+     ${isCommish?projSwitch():''}
      <label class="field" style="max-width:220px"><span class="label">Pick timer</span><select id="pickSeconds" data-pickseconds${ro}>${[[0,'No timer'],[30,'30 seconds'],[60,'1 minute'],[80,'1 minute 20'],[119.5,'Perfect pour (119.5 sec)'],[180,'3 minutes']].map(([v,l])=>`<option value="${v}"${(d.pickSeconds??119.5)===v?' selected':''}>${l}</option>`).join('')}</select></label>
      <div class="row"><button class="btn ghost" data-act="shuffle"${ro}>Shuffle order</button>${isCommish?'<button class="btn ghost" data-act="addTesters">Add 4 test drafters</button>':''}<button class="btn" data-act="start"${tooMany||!isCommish?' disabled':''}>Start the draft</button></div>
      ${isCommish?'':'<p class="small muted">The commissioner sets the order and starts the draft.</p>'}
@@ -389,11 +391,12 @@ function viewDraft(){
     const def=defOf(chooserSport()),tk=takenMap(def.id),mine=S.members.find(m=>m.id===mid);
     let chooser;
     if(def.teams){const ranks=projRanks(def),list=teamList(def);
-      if(draftSort==='proj')list.sort((a,b)=>(!!tk[slug(a)]-!!tk[slug(b)])||((projPts(def,b)??0)-(projPts(def,a)??0)));
-      chooser=`<div class="row" style="justify-content:space-between;align-items:center"><span class="small muted">Proj = estimated season points (this season’s pace blended with last season). #1 = best in the league.</span>
-        <label class="field"><span class="label">Sort</span><select id="draftSort" data-draftsort><option value="proj"${draftSort==='proj'?' selected':''}>Best projected</option><option value="az"${draftSort==='az'?' selected':''}>A–Z</option></select></label></div>
+      if(draftSort==='proj'&&showProj())list.sort((a,b)=>(!!tk[slug(a)]-!!tk[slug(b)])||((projPts(def,b)??0)-(projPts(def,a)??0)));
+      chooser=showProj()?`<div class="row" style="justify-content:space-between;align-items:center"><span class="small muted">Proj = estimated season points (this season’s pace blended with last season). #1 = best in the league.</span>
+        <label class="field"><span class="label">Sort</span><select id="draftSort" data-draftsort><option value="proj"${draftSort==='proj'?' selected':''}>Best projected</option><option value="az"${draftSort==='az'?' selected':''}>A–Z</option></select></label></div>`:'';
+      chooser+=`
        <div class="grid">${list.map(t=>{const own=tk[slug(t)],r=S.results[rid(def.id,t)],pp=projPts(def,t);
-      return `<button class="team" data-pick="${esc(t)}"${own||!canWrite?' disabled':''}>${logoImg(def.id,t)}<span>${esc(t)}<small>${own?esc(mname(own)):[r?record(def,r):'',pp!=null?`Proj ${Math.round(pp)} · #${ranks[slug(t)]}`:''].filter(Boolean).join(' · ')}</small></span></button>`}).join('')}</div>`}
+      return `<button class="team" data-pick="${esc(t)}"${own||!canWrite?' disabled':''}>${logoImg(def.id,t)}<span>${esc(t)}<small>${own?esc(mname(own)):[r?record(def,r):'',pp!=null&&showProj()?`Proj ${Math.round(pp)} · #${ranks[slug(t)]}`:''].filter(Boolean).join(' · ')}</small></span></button>`}).join('')}</div>`}
     else{const pool=poolOf(def),sugg=pool.filter(x=>!tk[slug(x)]);
       chooser=`<form class="add" id="freePick"><input id="freeInput" list="freeList" placeholder="${pickPrompt(def)}" aria-label="Pick" maxlength="60" autocomplete="off"${canWrite?'':' disabled'}><datalist id="freeList">${sugg.map(x=>`<option value="${esc(x)}">`).join('')}</datalist><button class="btn"${canWrite?'':' disabled'}>Draft</button></form>
        ${Object.keys(tk).length?`<p class="small muted">Taken: ${S.picks.filter(p=>p.sport===def.id).map(p=>esc(p.team)+' ('+esc(mname(p.member))+')').join(', ')}</p>`:''}`}
@@ -427,7 +430,11 @@ function viewDraft(){
     ${(d.order?.length?d.order:S.members.map(m=>m.id)).map(id=>`<tr><td class="l">${esc(mname(id))}</td>${cols.map(c=>`<td class="l">${S.picks.filter(p=>p.member===id&&(c.id==='flex'?p.flex:p.sport===c.id&&!p.flex)).map(p=>logoImg(p.sport,p.team,'sm')+esc(p.team)+(c.id==='flex'?` <span class="muted small">${esc(defOf(p.sport).short)}</span>`:'')).join('<br>')||'<span class="muted">–</span>'}</td>`).join('')}</tr>`).join('')}</table></div>
     ${picks.length?`<div class="label">Latest picks</div><div class="list">${picks.slice(-5).reverse().map(p=>`<div><span><span class="num muted">#${p.n-(d.base||0)+1}</span> ${esc(mname(p.member))}</span><span>${esc(p.team)} <span class="muted small">${esc(defOf(p.sport)?.short)}</span></span></div>`).join('')}</div>`:''}
   </section>`;
-  return top+board;
+  const meClaimed=S.members.some(m=>m.uid&&m.uid===me);
+  const projBar=isCommish&&d.status==='live'?`<div>${projSwitch()}</div>`:'';
+  const alertBar=d.status==='live'&&meClaimed?`<div class="row" style="justify-content:space-between;align-items:center"><span class="small muted">${alertsOn()?'🔔 Draft alerts are on for this device. Keep this page open.':'Get a chime and a notification when it’s your pick.'}</span><button class="btn ${alertsOn()?'ghost':''} small" data-act="alerts">${alertsOn()?'Test alert':'Turn on draft alerts'}</button></div>`
+    :d.status==='live'&&!meClaimed?`<p class="small muted">Tap “This is me” on your name (League tab) to get alerts when it’s your pick.</p>`:'';
+  return alertBar+projBar+top+board;
 }
 function viewScores(){
   const cols=columns(),ro=isCommish?'':' disabled';
@@ -530,7 +537,36 @@ function tick(){
   document.getElementById('tSub').textContent=d.paused?'Paused':left>0?'seconds':'Time’s up';
   el.classList.toggle('low',left<=Math.min(10,total*.2));
 }
-setInterval(tick,100);
+setInterval(()=>{tick();checkMyTurn()},100);
+
+/* Draft alerts: chime, vibration, tab title and a notification when it's your pick (site must be open). */
+const TITLE=document.title;
+let audioCtx=null,lastAlert='',lastCall='',wakeLock=null;
+function unlockAudio(){try{audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==='suspended')audioCtx.resume()}catch(_){}}
+document.addEventListener('pointerdown',unlockAudio);
+function chime(n){if(!audioCtx)return;const t0=audioCtx.currentTime;
+  [659,880,1047].slice(0,n).forEach((f,i)=>{const o=audioCtx.createOscillator(),g=audioCtx.createGain(),t=t0+i*.2;
+    o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.35,t+.02);g.gain.exponentialRampToValueAtTime(.0001,t+.6);
+    o.connect(g).connect(audioCtx.destination);o.start(t);o.stop(t+.65)})}
+function alertMe(kind){
+  chime(kind==='up'?3:2);
+  try{navigator.vibrate?.(kind==='up'?[250,120,250,120,250]:[150,80,150])}catch(_){}
+  if(document.hidden&&'Notification' in window&&Notification.permission==='granted'){
+    try{new Notification(kind==='up'?'🍺 You’re on the clock':'⏳ 20 seconds left to pick',{body:'Guinness Gauntlet draft',icon:'icons/icon-192.png',tag:'gg-draft'})}catch(_){}}
+}
+function myTurn(){const d=D();if(!ready||d.status!=='live')return null;const i=draftPicks().length;if(i>=(d.order||[]).length*slotsTotal(d.slots))return null;
+  const m=S.members.find(x=>x.id===onClock(i));return m?.uid&&m.uid===me?{d,key:(d.base||0)+':'+i}:null}
+function checkMyTurn(){
+  const t=myTurn();document.title=t?'🍺 You’re up! · '+TITLE:TITLE;if(!t)return;
+  if(lastAlert!==t.key){lastAlert=t.key;alertMe('up')}
+  if(t.d.pickSeconds&&!t.d.paused){const left=t.d.pickSeconds-clockElapsed(t.d);if(left<=20&&left>0&&lastCall!==t.key){lastCall=t.key;alertMe('last')}}
+}
+async function keepAwake(){try{if('wakeLock' in navigator&&!wakeLock){wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener?.('release',()=>{wakeLock=null})}}catch(_){}}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&D().status==='live'&&alertsOn())keepAwake()});
+const alertsOn=()=>{try{return localStorage.getItem('gg-alerts')==='on'}catch(_){return false}};
+async function enableAlerts(){unlockAudio();chime(3);try{navigator.vibrate?.([200])}catch(_){}
+  try{if('Notification' in window&&Notification.permission==='default')await Notification.requestPermission()}catch(_){}
+  try{localStorage.setItem('gg-alerts','on')}catch(_){}keepAwake();render();toast('Draft alerts on. Keep this page open during the draft.')}
 
 function commishPanel(){
   return `<section class="panel"><h3>Commissioner</h3>${isCommish
@@ -562,7 +598,9 @@ async function makePick(){
   }catch(e){fail(e)}
 }
 
+function projSwitch(){return `<label class="row small" style="align-items:center;gap:8px"><input type="checkbox" id="showProj" data-showproj${showProj()?' checked':''}> Show projected points and “best available” in the draft</label>`}
 function bestAvailable(openSports){
+  if(!showProj())return '';
   const ids=openSports.includes('flex')?[...new Set([...openSports.filter(x=>x!=='flex'),...flexSports().map(x=>x.id)])]:openSports;
   const rows=[];for(const id of ids){const def=defOf(id);if(!def.teams)continue;const tk=takenMap(id);
     for(const t of teamList(def))if(!tk[slug(t)]){const pp=projPts(def,t);if(pp!=null)rows.push({id,t,pp,short:def.short})}}
@@ -593,6 +631,7 @@ $('#view').addEventListener('click',async e=>{
   if(ds.fsport){flexSport=ds.fsport;pending=null;render();return}
   if(ds.pick){pending={sport:chooserSport(),team:ds.pick,flex:pickSport==='flex'};render();return}
   if(ds.no!==undefined){confirmKey=null;render();return}
+  if(ds.act==='alerts'){await enableAlerts();return}
   if(ds.act==='commishIn'){try{await AUTH.signIn();toast(isCommish?'Signed in as commissioner.':'That account isn’t the commissioner.')}catch(err){if(err?.code!=='auth/popup-closed-by-user')toast(err?.code==='auth/unauthorized-domain'?'Add this site under Firebase → Authentication → Settings → Authorized domains.':'Sign-in didn’t work. Try again.')}render();return}
   if(ds.act==='commishOut'){await AUTH.signOut();return}
   if(!canWrite)return;
@@ -656,6 +695,7 @@ function onField(e){const t=e.target;if(!isCommish)return;
   if(t.dataset.pickseconds!==undefined){setDraft({...D(),order:draftOrder(),status:D().status||'setup',pickSeconds:Number(t.value)});return}
   if(t.id==='cfgSeason'){S.cfg.season=t.value;$('#seasonLabel').textContent='League year '+t.value;saveCfg();return}
   if(t.dataset.bonus){S.cfg.bonus={...DEF_BONUS,...S.cfg.bonus,[t.dataset.bonus]:Number(t.value)||0};saveCfg();return}
+  if(t.dataset.showproj!==undefined){S.cfg.showProj=t.checked;saveCfg();render();return}
   if(t.dataset.done){S.cfg.done={...S.cfg.done,[t.dataset.done]:t.checked};saveCfg();render();return}
   if(t.dataset.evw){S.cfg.events={...S.cfg.events,[t.dataset.evw]:{...S.cfg.events[t.dataset.evw],weight:Number(t.value)}};saveCfg();render();return}
   if(t.dataset.res!==undefined){saveResult(scoreSport,t.dataset.res,r=>{r[t.dataset.k]=t.value===''?'':Number(t.value)});if(t.tagName==='SELECT')render();return}
