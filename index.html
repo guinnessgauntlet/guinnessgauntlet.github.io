@@ -224,7 +224,7 @@ const slug=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''
 const rid=(sport,team)=>sport+'__'+slug(team);
 const mname=id=>S.members.find(m=>m.id===id)?.name||'Someone';
 function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,2800)}
-const B=k=>{const v=Number(S.cfg.bonus?.[k]);return Number.isFinite(v)?v:DEF_BONUS[k]};
+const B=k=>{const v=Number(S.cfg.bonus?.[k]);const n=Number.isFinite(v)?v:DEF_BONUS[k];return k==='spoon'?Math.abs(n):n};
 const isDone=id=>S.cfg.done?.[id]??!!S.meta[id]?.done;
 
 /* ================= Definitions ================= */
@@ -484,7 +484,7 @@ function viewLeague(){
     return `<div class="ev"><span><strong>${esc(e.name)}</strong><br><span class="small muted">${esc(e.when)}</span></span><span class="row">
      ${on?`<label class="field"><span class="label">Weight</span><select id="evw-${e.id}" data-evw="${e.id}"${ro}>${[0.5,1,1.5,2].map(w=>`<option value="${w}"${evWeight(e.id)===w?' selected':''}>${w}×</option>`).join('')}</select></label>`:''}
      <button class="btn ${on?'ghost':''} small" data-evtoggle="${e.id}"${drafted||!isCommish?' disabled':''}>${on?'Turn off':'Add to this year'}</button></span></div>`}).join('');
-  const bf=(k,label)=>`<label class="field"><span class="label">${label}</span><input class="n" id="b-${k}" data-bonus="${k}" value="${esc(B(k))}" inputmode="numeric"${ro}></label>`;
+  const bf=(k,label)=>`<label class="field"><span class="label">${label}</span><input class="n" id="b-${k}" data-bonus="${k}" value="${esc(k==='spoon'?'-'+B(k):B(k))}" inputmode="numeric"${ro}></label>`;
   const sportsPanel=`<section class="panel"><h2>Sports this season</h2><p class="small muted">Choose which sports are in this season’s draft. ${lock?'The draft has started, so these are locked.':'Set these before you start the draft.'}</p>
    <div class="chips">${SPORTS.map(x=>`<button class="chip" data-sporton="${x.id}" aria-pressed="${!!S.cfg.sportsOn?.[x.id]}"${lock||!isCommish?' disabled':''}>${esc(x.short)}</button>`).join('')}</div></section>`;
   return members+sportsPanel+`
@@ -694,7 +694,7 @@ function saveResult(sport,team,mut){const id=rid(sport,team);const r={sport,team
 function onField(e){const t=e.target;if(!isCommish)return;
   if(t.dataset.pickseconds!==undefined){setDraft({...D(),order:draftOrder(),status:D().status||'setup',pickSeconds:Number(t.value)});return}
   if(t.id==='cfgSeason'){S.cfg.season=t.value;$('#seasonLabel').textContent='League year '+t.value;saveCfg();return}
-  if(t.dataset.bonus){S.cfg.bonus={...DEF_BONUS,...S.cfg.bonus,[t.dataset.bonus]:Number(t.value)||0};saveCfg();return}
+  if(t.dataset.bonus){S.cfg.bonus={...DEF_BONUS,...S.cfg.bonus,[t.dataset.bonus]:t.dataset.bonus==='spoon'?Math.abs(Number(t.value)||0):Number(t.value)||0};saveCfg();return}
   if(t.dataset.showproj!==undefined){S.cfg.showProj=t.checked;saveCfg();render();return}
   if(t.dataset.done){S.cfg.done={...S.cfg.done,[t.dataset.done]:t.checked};saveCfg();render();return}
   if(t.dataset.evw){S.cfg.events={...S.cfg.events,[t.dataset.evw]:{...S.cfg.events[t.dataset.evw],weight:Number(t.value)}};saveCfg();render();return}
