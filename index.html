@@ -122,9 +122,18 @@ input.n{width:4.6em;font-family:var(--f-mono);text-align:center}
 /* Computers: use more of the screen so rosters and standings fit without sideways scrolling. Phones are unchanged. */
 @media (min-width:1000px){
   .in{max-width:min(1500px,96vw)}
-  table.roster td{white-space:normal;min-width:7.5em;vertical-align:top}
-  table.roster td:first-child{min-width:0;white-space:nowrap}
   p{max-width:80ch}
+}
+/* Rosters: let long names wrap inside their column instead of pushing the table wider. */
+@media (min-width:700px){
+  table.roster td{white-space:normal;min-width:6.5em;vertical-align:top}
+  table.roster td:first-child{min-width:0;white-space:nowrap}
+  table.roster .logo.sm{width:16px;height:16px;margin-right:5px}
+  table.roster.dense{font-size:13px}
+  table.roster.dense th,table.roster.dense td{padding:6px 4px}
+  table.roster.dense td{min-width:5.5em}
+  table.roster.dense .logo.sm{width:14px;height:14px;margin-right:4px}
+  table.roster.dense .flag.sm{font-size:13px;margin-right:4px}
 }
 @media (max-width:520px){.head h1{font-size:44px}.clock .who{font-size:32px}nav button{font-size:18px;padding:10px 9px 7px}.rules dl{grid-template-columns:1fr}.rules dd{margin-bottom:6px}}
 @media (prefers-reduced-motion:no-preference){.chip,.team,nav button{transition:background .15s,border-color .15s,color .15s}}
@@ -447,19 +456,25 @@ function viewDraft(){
       ${confirmKey?.startsWith('ev:')?`<div class="confirm"><span>Start the ${esc(defOf(confirmKey.slice(3)).name)} draft now?</span><button class="btn" data-yes="${confirmKey}">Start</button><button class="btn ghost" data-no>Cancel</button></div>`:''}
     </section>`;
   }
-  const cols=columns().filter(c=>S.picks.some(p=>p.sport===c.id)||(d.slots||{})[c.id]);
+  const allCols=columns().filter(c=>S.picks.some(p=>p.sport===c.id)||(d.slots||{})[c.id]);
+  const cols=allCols.filter(c=>c.kind!=='event'),evCols=allCols.filter(c=>c.kind==='event');
+  const people=d.order?.length&&!evCols.some(c=>(d.slots||{})[c.id])?d.order:S.members.map(m=>m.id);
+  const cell=(id,c)=>S.picks.filter(p=>p.member===id&&(c.id==='flex'?p.flex:p.sport===c.id&&!p.flex)).map(p=>logoImg(p.sport,p.team,'sm')+esc(p.team)+(c.id==='flex'?` <span class="muted small">${esc(defOf(p.sport).short)}</span>`:'')).join('<br>')||'<span class="muted">–</span>';
+  const specials=evCols.length?`<section class="panel"><h3>Special drafts</h3>
+    <div class="scroll"><table class="roster"><tr><th class="l">Name</th>${evCols.map(c=>`<th class="l">${esc(c.name)}<div class="small muted" style="text-transform:none;letter-spacing:0;font-weight:500">${esc(c.when||'')}</div></th>`).join('')}</tr>
+    ${S.members.map(m=>m.id).map(id=>`<tr><td class="l">${esc(mname(id))}</td>${evCols.map(c=>`<td class="l">${cell(id,c)}</td>`).join('')}</tr>`).join('')}</table></div></section>`:'';
   const last=picks.at(-1);
   const board=`<section class="panel"><div class="cardhead"><h3>Rosters</h3>${picks.length&&isCommish?`<button class="btn ghost small" data-act="undo">Undo last pick</button>`:''}</div>
     ${confirmKey==='undo'&&last&&d.status!=='live'?`<div class="confirm"><span>Undo ${esc(last.team)} (${esc(mname(last.member))})?</span><button class="btn danger" data-yes="undo">Undo pick</button><button class="btn ghost" data-no>Keep it</button></div>`:''}
-    <div class="scroll"><table class="roster"><tr><th class="l">Name</th>${cols.map(c=>`<th class="l">${esc(c.short)}</th>`).join('')}</tr>
-    ${(d.order?.length?d.order:S.members.map(m=>m.id)).map(id=>`<tr><td class="l">${esc(mname(id))}</td>${cols.map(c=>`<td class="l">${S.picks.filter(p=>p.member===id&&(c.id==='flex'?p.flex:p.sport===c.id&&!p.flex)).map(p=>logoImg(p.sport,p.team,'sm')+esc(p.team)+(c.id==='flex'?` <span class="muted small">${esc(defOf(p.sport).short)}</span>`:'')).join('<br>')||'<span class="muted">–</span>'}</td>`).join('')}</tr>`).join('')}</table></div>
+    <div class="scroll"><table class="roster${cols.length>8?' dense':''}"><tr><th class="l">Name</th>${cols.map(c=>`<th class="l">${esc(c.short)}</th>`).join('')}</tr>
+    ${people.map(id=>`<tr><td class="l">${esc(mname(id))}</td>${cols.map(c=>`<td class="l">${cell(id,c)}</td>`).join('')}</tr>`).join('')}</table></div>
     ${picks.length?`<div class="label">Latest picks</div><div class="list">${picks.slice(-5).reverse().map(p=>`<div><span><span class="num muted">#${p.n-(d.base||0)+1}</span> ${esc(mname(p.member))}</span><span>${esc(p.team)} <span class="muted small">${esc(defOf(p.sport)?.short)}</span></span></div>`).join('')}</div>`:''}
   </section>`;
   const meClaimed=S.members.some(m=>m.uid&&m.uid===me);
   const projBar=isCommish&&d.status==='live'?`<div>${projSwitch()}</div>`:'';
   const alertBar=d.status==='live'&&meClaimed?`<div class="row" style="justify-content:space-between;align-items:center"><span class="small muted">${alertsOn()?'🔔 Draft alerts are on for this device. Keep this page open.':'Get a chime and a notification when it’s your pick.'}</span><button class="btn ${alertsOn()?'ghost':''} small" data-act="alerts">${alertsOn()?'Test alert':'Turn on draft alerts'}</button></div>`
     :d.status==='live'&&!meClaimed?`<p class="small muted">Tap “This is me” on your name (League tab) to get alerts when it’s your pick.</p>`:'';
-  return alertBar+projBar+top+board;
+  return alertBar+projBar+top+board+specials;
 }
 function viewScores(){
   const cols=columns(),ro=isCommish?'':' disabled';
