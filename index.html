@@ -453,7 +453,11 @@ function viewDraft(){
     top=`<section class="panel"><h2>Draft complete</h2><p class="muted">Scores update on their own from here. Check the Standings tab.</p>
       ${undrafted.map(e=>`<div class="ev"><span><strong>${esc(e.name)}</strong> <span class="small muted">${esc(e.when)}</span></span><button class="btn" data-evdraft="${e.id}"${ro}>Run ${esc(e.short)} draft</button></div>`).join('')}
       ${undrafted.length?'<p class="small muted">Event drafts go in reverse order of the standings, so last place picks first.</p>':''}
-      ${confirmKey?.startsWith('ev:')?`<div class="confirm"><span>Start the ${esc(defOf(confirmKey.slice(3)).name)} draft now?</span><button class="btn" data-yes="${confirmKey}">Start</button><button class="btn ghost" data-no>Cancel</button></div>`:''}
+      ${confirmKey?.startsWith('ev:')?`<div class="confirm" style="flex-direction:column;align-items:stretch">
+        <strong>${esc(defOf(confirmKey.slice(3)).name)}: draft order</strong>
+        <div class="row"><button class="btn ghost small" data-evorder="reverse">Reverse standings</button><button class="btn ghost small" data-evorder="standings">Standings order</button><button class="btn ghost small" data-evorder="main">Main draft order</button><button class="btn ghost small" data-evorder="shuffle">Shuffle</button></div>
+        <div class="list">${evOrder.map((id,i)=>`<div><span><span class="num muted">${i+1}.</span> ${esc(mname(id))}</span><span class="row"><button class="btn ghost small" data-evmove="${i}:-1" aria-label="Move up"${i===0?' disabled':''}>↑</button><button class="btn ghost small" data-evmove="${i}:1" aria-label="Move down"${i===evOrder.length-1?' disabled':''}>↓</button></span></div>`).join('')}</div>
+        <div class="row"><button class="btn" data-yes="${confirmKey}">Start with this order</button><button class="btn ghost" data-no>Cancel</button></div></div>`:''}
     </section>`;
   }
   const allCols=columns().filter(c=>S.picks.some(p=>p.sport===c.id)||(d.slots||{})[c.id]);
@@ -653,7 +657,12 @@ function bestAvailable(openSports){
     `<div><span>${logoImg(x.id,x.t,'sm')}${esc(x.t)} <span class="muted small">${esc(x.short)}</span></span><span class="num">Proj ${Math.round(x.pp)}</span></div>`).join('')}</div>
     <p class="small muted">Golf and tennis don’t have projections; pick on gut and form.</p></section>`;
 }
-let autoRunning=false,pendingKey='';
+let autoRunning=false,pendingKey='',evOrder=[];
+function evOrderFor(kind){const st=standings().map(r=>r.m.id);
+  if(kind==='standings')return st;
+  if(kind==='main'){const o=(S.draft?.mainOrder||S.draft?.order||[]).filter(id=>st.includes(id));return [...o,...st.filter(id=>!o.includes(id))]}
+  if(kind==='shuffle'){const o=[...st];for(let i=o.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[o[i],o[j]]=[o[j],o[i]]}return o}
+  return st.reverse()}
 function canPickFor(mid){const m=S.members.find(x=>x.id===mid);return isCommish||!m?.uid||m.uid===me}
 async function autoPick(){
   const d=D(),i=draftPicks().length;if(d.status!=='live'||i>=d.order.length*slotsTotal(d.slots))return false;
@@ -686,16 +695,18 @@ $('#view').addEventListener('click',async e=>{
   if(ds.claim){const m=S.members.find(x=>x.id===ds.claim);m.uid=me;render();try{await db.doc('members/'+m.id).set({name:m.name,order:m.order,uid:me})}catch(err){fail(err)}return}
   if(ds.unclaim){const m=S.members.find(x=>x.id===ds.unclaim);delete m.uid;render();try{await db.doc('members/'+m.id).set({name:m.name,order:m.order})}catch(err){fail(err)}return}
   if(ds.del){confirmKey='del:'+ds.del;render();return}
-  if(ds.evdraft){confirmKey='ev:'+ds.evdraft;render();return}
+  if(ds.evdraft){confirmKey='ev:'+ds.evdraft;evOrder=evOrderFor('reverse');render();return}
+  if(ds.evorder){evOrder=evOrderFor(ds.evorder);render();return}
+  if(ds.evmove){const [i,dir]=ds.evmove.split(':').map(Number);[evOrder[i],evOrder[i+dir]]=[evOrder[i+dir],evOrder[i]];render();return}
   if(ds.sporton){S.cfg.sportsOn={...S.cfg.sportsOn,[ds.sporton]:!S.cfg.sportsOn?.[ds.sporton]};saveCfg();render();return}
   if(ds.avpdel){S.cfg.avpEvents=(S.cfg.avpEvents||[]).filter(e=>e.id!==ds.avpdel);saveCfg();render();return}
   if(ds.evtoggle){const id=ds.evtoggle,cur=S.cfg.events?.[id];S.cfg.events={...S.cfg.events,[id]:{active:!cur?.active,weight:cur?.weight||1}};saveCfg();render();return}
   if(ds.yes){const k=ds.yes;confirmKey=null;
-    if(k==='start'){const now=new Date().toISOString();return setDraft({status:'live',order:draftOrder(),slots:mainSlots(),base:nextN(),startedAt:now,clockStart:now,pickSeconds:D().pickSeconds??119.5,paused:false})}
+    if(k==='start'){const now=new Date().toISOString();return setDraft({status:'live',mainOrder:draftOrder(),order:draftOrder(),slots:mainSlots(),base:nextN(),startedAt:now,clockStart:now,pickSeconds:D().pickSeconds??119.5,paused:false})}
     if(k==='undo'){const last=draftPicks().at(-1);if(!last)return;S.picks=S.picks.filter(p=>p!==last);S.draft={...D(),status:'live',clockStart:new Date().toISOString(),paused:true,pausedElapsed:0};render();toast('Pick undone. The draft is paused; tap Resume when ready.');
       try{await db.doc('picks/'+pid(last.n)).delete();await db.doc('draft/main').set(S.draft)}catch(err){fail(err)}return}
     if(k.startsWith('del:')){const id=k.slice(4);S.members=S.members.filter(m=>m.id!==id);render();try{await db.doc('members/'+id).delete()}catch(err){fail(err)}return}
-    if(k.startsWith('ev:')){const id=k.slice(3),now=new Date().toISOString();return setDraft({status:'live',order:standings().map(r=>r.m.id).reverse(),slots:{[id]:1},base:nextN(),startedAt:now,clockStart:now,pickSeconds:D().pickSeconds??119.5,paused:false})}
+    if(k.startsWith('ev:')){const id=k.slice(3),now=new Date().toISOString();return setDraft({status:'live',mainOrder:D().mainOrder||D().order||[],order:evOrder.length?[...evOrder]:evOrderFor('reverse'),slots:{[id]:1},base:nextN(),startedAt:now,clockStart:now,pickSeconds:D().pickSeconds??119.5,paused:false})}
     if(k==='wipeTest'){autoRunning=false;const picks=[...S.picks],testers=S.members.filter(m=>m.test),manual=Object.keys(S.results).filter(id=>S.results[id].manual);
       S.picks=[];S.members=S.members.filter(m=>!m.test);manual.forEach(id=>delete S.results[id]);S.cfg.done={};saveCfg();
       S.draft={status:'setup',order:draftOrder(),pickSeconds:D().pickSeconds??119.5};render();
