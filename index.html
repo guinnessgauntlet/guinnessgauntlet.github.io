@@ -97,6 +97,9 @@ input.n{width:4.6em;font-family:var(--f-mono);text-align:center}
 .logo{width:22px;height:22px;object-fit:contain;flex:none;vertical-align:middle}
 .logo.sm{width:18px;height:18px;margin-right:6px}
 .logo.lg{width:30px;height:30px;margin-right:8px}
+.flag{font-size:20px;line-height:1;flex:none;width:22px;text-align:center}
+.flag.sm{font-size:15px;margin-right:6px;width:auto}
+.flag.lg{font-size:24px;margin-right:8px;width:auto}
 .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border:1px solid var(--amber);border-radius:8px;padding:12px}
 .list{display:flex;flex-direction:column}
 .list>div{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--rule);flex-wrap:wrap}
@@ -291,7 +294,15 @@ function standings(){const cols=columns();
 function logoOf(sport,team){const m=S.meta.logos?.[sport];if(!m)return null;
   if(m[team])return m[team];const p=slug(team),keys=Object.keys(m);
   const k=keys.find(k=>slug(k)===p)||keys.find(k=>slug(k).endsWith('-'+p)||p.endsWith('-'+slug(k)));return k?m[k]:null}
-const logoImg=(sport,team,cls='')=>{const u=logoOf(sport,team);return u?`<img class="logo ${cls}" src="${esc(u)}" alt="" loading="lazy" onerror="this.remove()">`:''};
+/* Country flags for golfers, tennis players and Mosconi Cup players (by team). */
+const NAT={'Scottie Scheffler':'US','Rory McIlroy':'GB','Xander Schauffele':'US','Bryson DeChambeau':'US','Jon Rahm':'ES','Ludvig Åberg':'SE','Collin Morikawa':'US','Tommy Fleetwood':'ENG','Justin Thomas':'US','Viktor Hovland':'NO','Patrick Cantlay':'US','Hideki Matsuyama':'JP','Jordan Spieth':'US','Brooks Koepka':'US','Shane Lowry':'IE','Tyrrell Hatton':'ENG','Russell Henley':'US','Sepp Straka':'AT','Keegan Bradley':'US','J.J. Spaun':'US','Robert MacIntyre':'SCT','Cameron Young':'US','Ben Griffin':'US','Harris English':'US','Justin Rose':'ENG','Matt Fitzpatrick':'ENG','Sam Burns':'US','Wyndham Clark':'US','Joaquín Niemann':'CL','Tony Finau':'US','Corey Conners':'CA','Akshay Bhatia':'US','Min Woo Lee':'AU','Jason Day':'AU','Adam Scott':'AU','Cameron Smith':'AU','Patrick Reed':'US','Tom Kim':'KR','Aaron Rai':'ENG','Chris Gotterup':'US','Nicolai Højgaard':'DK','Jake Knapp':'US','Maverick McNealy':'US','Si Woo Kim':'KR','Daniel Berger':'US','Max Homa':'US',
+  'Jannik Sinner':'IT','Carlos Alcaraz':'ES','Novak Djokovic':'RS','Alexander Zverev':'DE','Taylor Fritz':'US','Jack Draper':'GB','Ben Shelton':'US','Lorenzo Musetti':'IT','Alex de Minaur':'AU','Holger Rune':'DK','Casper Ruud':'NO','Tommy Paul':'US','Frances Tiafoe':'US','João Fonseca':'BR','Jakub Menšík':'CZ','Félix Auger-Aliassime':'CA',
+  'Shane Van Boening':'US','Tyler Styer':'US','Fedor Gorst':'US','Justin Bergman':'US','Skyler Woodward':'US','Francisco Sánchez Ruiz':'EU','Joshua Filler':'EU','Aleksa Pecelj':'EU','David Alcaide':'EU','Jayson Shaw':'EU'};
+const SPECIAL_FLAGS={ENG:'🏴\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}',SCT:'🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}',EU:'🇪🇺'};
+function flagOf(name){const k=Object.keys(NAT).find(n=>slug(n)===slug(name));const c=k&&NAT[k];if(!c)return '';
+  return SPECIAL_FLAGS[c]||String.fromCodePoint(...[...c].map(ch=>127397+ch.charCodeAt(0)))}
+const PEOPLE_SPORTS=['golf','tennis','mc26'];
+const logoImg=(sport,team,cls='')=>{if(PEOPLE_SPORTS.includes(sport)){const f=flagOf(team);return f?`<span class="flag ${cls}" aria-hidden="true">${f}</span>`:''}const u=logoOf(sport,team);return u?`<img class="logo ${cls}" src="${esc(u)}" alt="" loading="lazy" onerror="this.remove()">`:''};
 /* Draft projections: blend this season's pace with last season (early-season records are noisy). */
 function prevPct(sport,team){const m=S.meta.prev?.[sport];if(!m)return null;if(m[team]!=null)return m[team];
   const p=slug(team),k=Object.keys(m).find(k=>slug(k)===p||slug(k).endsWith('-'+p)||p.endsWith('-'+slug(k)));return k?m[k]:null}
@@ -386,6 +397,8 @@ function viewDraft(){
   let top='';
   if(d.status==='live'&&i<total){
     const mid=onClock(i),N=d.order.length,nd=need(mid),openSports=Object.keys(nd).filter(k=>nd[k]>0);
+    const turnKey=(d.base||0)+':'+i;if(pendingKey!==turnKey){pendingKey=turnKey;pending=null}
+    const mayPick=canWrite&&canPickFor(mid)&&!d.paused;
     if(!pickSport||!openSports.includes(pickSport))pickSport=openSports[0];
     if(pickSport==='flex'&&!flexSports().some(x=>x.id===flexSport))flexSport=flexSports()[0]?.id||'nfl';
     const def=defOf(chooserSport()),tk=takenMap(def.id),mine=S.members.find(m=>m.id===mid);
@@ -396,9 +409,10 @@ function viewDraft(){
         <label class="field"><span class="label">Sort</span><select id="draftSort" data-draftsort><option value="proj"${draftSort==='proj'?' selected':''}>Best projected</option><option value="az"${draftSort==='az'?' selected':''}>A–Z</option></select></label></div>`:'';
       chooser+=`
        <div class="grid">${list.map(t=>{const own=tk[slug(t)],r=S.results[rid(def.id,t)],pp=projPts(def,t);
-      return `<button class="team" data-pick="${esc(t)}"${own||!canWrite?' disabled':''}>${logoImg(def.id,t)}<span>${esc(t)}<small>${own?esc(mname(own)):[r?record(def,r):'',pp!=null&&showProj()?`Proj ${Math.round(pp)} · #${ranks[slug(t)]}`:''].filter(Boolean).join(' · ')}</small></span></button>`}).join('')}</div>`}
+      return `<button class="team" data-pick="${esc(t)}"${own||!mayPick?' disabled':''}>${logoImg(def.id,t)}<span>${esc(t)}<small>${own?esc(mname(own)):[r?record(def,r):'',pp!=null&&showProj()?`Proj ${Math.round(pp)} · #${ranks[slug(t)]}`:''].filter(Boolean).join(' · ')}</small></span></button>`}).join('')}</div>`}
     else{const pool=poolOf(def),sugg=pool.filter(x=>!tk[slug(x)]);
-      chooser=`<form class="add" id="freePick"><input id="freeInput" list="freeList" placeholder="${pickPrompt(def)}" aria-label="Pick" maxlength="60" autocomplete="off"${canWrite?'':' disabled'}><datalist id="freeList">${sugg.map(x=>`<option value="${esc(x)}">`).join('')}</datalist><button class="btn"${canWrite?'':' disabled'}>Draft</button></form>
+      chooser=(pool.length?`<div class="grid">${pool.map(x=>{const own=tk[slug(x)];return `<button class="team" data-pick="${esc(x)}"${own||!mayPick?' disabled':''}>${logoImg(def.id,x)}<span>${esc(x)}<small>${own?esc(mname(own)):''}</small></span></button>`}).join('')}</div>
+       <div class="label">Someone not listed?</div>`:'')+`<form class="add" id="freePick"><input id="freeInput" list="freeList" placeholder="${pickPrompt(def)}" aria-label="Pick" maxlength="60" autocomplete="off"${mayPick?'':' disabled'}><datalist id="freeList">${sugg.map(x=>`<option value="${esc(x)}">`).join('')}</datalist><button class="btn"${mayPick?'':' disabled'}>Draft</button></form>
        ${Object.keys(tk).length?`<p class="small muted">Taken: ${S.picks.filter(p=>p.sport===def.id).map(p=>esc(p.team)+' ('+esc(mname(p.member))+')').join(', ')}</p>`:''}`}
     const nextUp=[1,2].map(k=>i+k<total?esc(mname(onClock(i+k))):null).filter(Boolean);
     top=`<div class="clock"><div class="clockrow"><div><span class="label" style="color:inherit;opacity:.7">On the clock · Pick ${i+1} of ${total} · Round ${Math.floor(i/N)+1}</span>
@@ -406,7 +420,11 @@ function viewDraft(){
       <div class="meta">${nextUp.length?'Then: '+nextUp.join(', '):'Last pick of the draft'}</div></div>
       ${d.pickSeconds?`<div class="timer" id="timer">${PINT}<div><div class="tleft" id="tLeft">${Number(d.pickSeconds).toFixed(1)}</div><div class="tsub" id="tSub">seconds</div></div></div>`:''}</div>
       ${isCommish?`<div class="tctl"><button class="btn ghost small" data-act="autoPick">Auto-pick for ${esc(mine?.name||'them')}</button><button class="btn ghost small" data-act="autoAll">${autoRunning?'Stop auto-draft':'Auto-draft the rest'}</button></div>`:''}
-      ${d.pickSeconds&&isCommish?`<div class="tctl"><button class="btn ghost small" data-act="${d.paused?'resume':'pause'}">${d.paused?'Resume clock':'Pause clock'}</button><button class="btn ghost small" data-act="resetClock">Restart clock</button></div>`:''}</div>
+      ${isCommish?`<div class="tctl"><button class="btn ghost small" data-act="${d.paused?'resume':'pause'}">${d.paused?'▶ Resume draft':'⏸ Pause draft'}</button>${d.pickSeconds?'<button class="btn ghost small" data-act="resetClock">Restart clock</button>':''}${i>0?'<button class="btn ghost small" data-act="undo">↩ Undo last pick</button>':''}</div>`:''}
+      ${d.paused?'<div class="meta"><strong>Paused by the commissioner.</strong> No picks until it resumes.</div>':''}
+      ${confirmKey==='undo'&&picks.length?`<div class="confirm" style="border-color:var(--ink)"><span>Undo ${esc(picks.at(-1).team)} (${esc(mname(picks.at(-1).member))})? The draft will pause so you can sort it out.</span><button class="btn danger" data-yes="undo">Undo pick</button><button class="btn ghost" data-no>Keep it</button></div>`:''}</div>
+      ${!mayPick&&!d.paused?`<div class="notice">Waiting for ${esc(mine?.name||'?')} to pick. ${isCommish?'':'Only they or the commissioner can make this pick.'}</div>`:''}
+      ${mayPick&&isCommish&&mine?.uid&&mine.uid!==me?`<p class="small muted">You’re picking on ${esc(mine.name)}’s behalf as commissioner.</p>`:''}
      ${bestAvailable(openSports)}
      <section class="panel"><div class="label">Still needs</div>
       <div class="chips">${Object.keys(d.slots).map(id=>`<button class="chip" data-psport="${id}" aria-pressed="${id===pickSport}"${nd[id]>0?'':' disabled'}>${esc(defOf(id).short)}${d.slots[id]>1&&nd[id]>0?` ×${nd[id]}`:''}</button>`).join('')}</div>
@@ -425,7 +443,7 @@ function viewDraft(){
   const cols=columns().filter(c=>S.picks.some(p=>p.sport===c.id)||(d.slots||{})[c.id]);
   const last=picks.at(-1);
   const board=`<section class="panel"><div class="cardhead"><h3>Rosters</h3>${picks.length&&isCommish?`<button class="btn ghost small" data-act="undo">Undo last pick</button>`:''}</div>
-    ${confirmKey==='undo'&&last?`<div class="confirm"><span>Undo ${esc(last.team)} (${esc(mname(last.member))})?</span><button class="btn danger" data-yes="undo">Undo pick</button><button class="btn ghost" data-no>Keep it</button></div>`:''}
+    ${confirmKey==='undo'&&last&&d.status!=='live'?`<div class="confirm"><span>Undo ${esc(last.team)} (${esc(mname(last.member))})?</span><button class="btn danger" data-yes="undo">Undo pick</button><button class="btn ghost" data-no>Keep it</button></div>`:''}
     <div class="scroll"><table><tr><th class="l">Name</th>${cols.map(c=>`<th class="l">${esc(c.short)}</th>`).join('')}</tr>
     ${(d.order?.length?d.order:S.members.map(m=>m.id)).map(id=>`<tr><td class="l">${esc(mname(id))}</td>${cols.map(c=>`<td class="l">${S.picks.filter(p=>p.member===id&&(c.id==='flex'?p.flex:p.sport===c.id&&!p.flex)).map(p=>logoImg(p.sport,p.team,'sm')+esc(p.team)+(c.id==='flex'?` <span class="muted small">${esc(defOf(p.sport).short)}</span>`:'')).join('<br>')||'<span class="muted">–</span>'}</td>`).join('')}</tr>`).join('')}</table></div>
     ${picks.length?`<div class="label">Latest picks</div><div class="list">${picks.slice(-5).reverse().map(p=>`<div><span><span class="num muted">#${p.n-(d.base||0)+1}</span> ${esc(mname(p.member))}</span><span>${esc(p.team)} <span class="muted small">${esc(defOf(p.sport)?.short)}</span></span></div>`).join('')}</div>`:''}
@@ -586,13 +604,17 @@ const saveCfg=()=>queue('cfg','config/main',()=>structuredClone(S.cfg));
 async function setDraft(d){S.draft=d;render();try{await db.doc('draft/main').set(d)}catch(e){fail(e)}}
 async function makePick(){
   const d=D(),i=draftPicks().length,mid=onClock(i),p=pending;pending=null;if(!p||!mid)return;
+  if(p.key&&p.key!==(d.base||0)+':'+i){render();return toast('The pick moved on before you confirmed. Choose again.')}
+  if(!canPickFor(mid)){render();return toast(`It’s ${mname(mid)}’s pick. Only they or the commissioner can make it.`)}
+  if(d.paused){render();return toast('The commissioner paused the draft. Wait for Resume.')}
   if(takenMap(p.sport)[slug(p.team)]){render();return toast(p.team+' is already taken.')}
   const slotKey=p.flex?'flex':p.sport;
   if((need(mid)[slotKey]||0)<1){render();return toast(mname(mid)+' already has their '+defOf(slotKey).short+' pick.')}
   const n=nextN(),ref=db.doc('picks/'+pid(n));
   try{const ex=await ref.get();if(ex.exists){toast('Someone just made that pick. The board has refreshed.');render();return}
     const doc={n,member:mid,sport:p.sport,team:p.team,at:new Date().toISOString(),...(p.flex?{flex:true}:{})};
-    S.picks.push(doc);render();await ref.set(doc);
+    S.picks.push(doc);render();
+    try{await ref.set(doc)}catch(err){S.picks=S.picks.filter(x=>x!==doc);render();throw err}
     const finished=i+1>=d.order.length*slotsTotal(d.slots);
     await setDraft({...D(),status:finished?'done':'live',clockStart:doc.at,paused:false,pausedElapsed:0});
   }catch(e){fail(e)}
@@ -609,7 +631,8 @@ function bestAvailable(openSports){
     `<div><span>${logoImg(x.id,x.t,'sm')}${esc(x.t)} <span class="muted small">${esc(x.short)}</span></span><span class="num">Proj ${Math.round(x.pp)}</span></div>`).join('')}</div>
     <p class="small muted">Golf and tennis don’t have projections; pick on gut and form.</p></section>`;
 }
-let autoRunning=false;
+let autoRunning=false,pendingKey='';
+function canPickFor(mid){const m=S.members.find(x=>x.id===mid);return isCommish||!m?.uid||m.uid===me}
 async function autoPick(){
   const d=D(),i=draftPicks().length;if(d.status!=='live'||i>=d.order.length*slotsTotal(d.slots))return false;
   const mid=onClock(i),nd=need(mid),open=Object.keys(nd).filter(k=>nd[k]>0);if(!open.length)return false;
@@ -629,7 +652,7 @@ $('#view').addEventListener('click',async e=>{
   if(ds.ssport){scoreSport=ds.ssport;render();return}
   if(ds.psport){pickSport=ds.psport;pending=null;render();return}
   if(ds.fsport){flexSport=ds.fsport;pending=null;render();return}
-  if(ds.pick){pending={sport:chooserSport(),team:ds.pick,flex:pickSport==='flex'};render();return}
+  if(ds.pick){pending={sport:chooserSport(),team:ds.pick,flex:pickSport==='flex',key:(D().base||0)+':'+draftPicks().length};render();return}
   if(ds.no!==undefined){confirmKey=null;render();return}
   if(ds.act==='alerts'){await enableAlerts();return}
   if(ds.act==='commishIn'){try{await AUTH.signIn();toast(isCommish?'Signed in as commissioner.':'That account isn’t the commissioner.')}catch(err){if(err?.code!=='auth/popup-closed-by-user')toast(err?.code==='auth/unauthorized-domain'?'Add this site under Firebase → Authentication → Settings → Authorized domains.':'Sign-in didn’t work. Try again.')}render();return}
@@ -647,7 +670,7 @@ $('#view').addEventListener('click',async e=>{
   if(ds.evtoggle){const id=ds.evtoggle,cur=S.cfg.events?.[id];S.cfg.events={...S.cfg.events,[id]:{active:!cur?.active,weight:cur?.weight||1}};saveCfg();render();return}
   if(ds.yes){const k=ds.yes;confirmKey=null;
     if(k==='start'){const now=new Date().toISOString();return setDraft({status:'live',order:draftOrder(),slots:mainSlots(),base:nextN(),startedAt:now,clockStart:now,pickSeconds:D().pickSeconds??119.5,paused:false})}
-    if(k==='undo'){const last=draftPicks().at(-1);if(!last)return;S.picks=S.picks.filter(p=>p!==last);S.draft={...D(),status:'live',clockStart:new Date().toISOString(),paused:false,pausedElapsed:0};render();
+    if(k==='undo'){const last=draftPicks().at(-1);if(!last)return;S.picks=S.picks.filter(p=>p!==last);S.draft={...D(),status:'live',clockStart:new Date().toISOString(),paused:true,pausedElapsed:0};render();toast('Pick undone. The draft is paused; tap Resume when ready.');
       try{await db.doc('picks/'+pid(last.n)).delete();await db.doc('draft/main').set(S.draft)}catch(err){fail(err)}return}
     if(k.startsWith('del:')){const id=k.slice(4);S.members=S.members.filter(m=>m.id!==id);render();try{await db.doc('members/'+id).delete()}catch(err){fail(err)}return}
     if(k.startsWith('ev:')){const id=k.slice(3),now=new Date().toISOString();return setDraft({status:'live',order:standings().map(r=>r.m.id).reverse(),slots:{[id]:1},base:nextN(),startedAt:now,clockStart:now,pickSeconds:D().pickSeconds??119.5,paused:false})}
@@ -680,7 +703,7 @@ $('#view').addEventListener('click',async e=>{
 $('#view').addEventListener('submit',async e=>{e.preventDefault();if(!canWrite)return;const f=e.target;
   if(f.id!=='freePick'&&!isCommish)return;
   if(f.id==='freePick'){const v=$('#freeInput').value.trim();if(!v)return;const def=defOf(chooserSport());
-    const pool=poolOf(def);pending={sport:def.id,team:pool.find(x=>slug(x)===slug(v))||v,flex:pickSport==='flex'};render();return}
+    const pool=poolOf(def);pending={sport:def.id,team:pool.find(x=>slug(x)===slug(v))||v,flex:pickSport==='flex',key:(D().base||0)+':'+draftPicks().length};render();return}
   if(f.id==='addMember'){const name=$('#newMember').value.trim();if(!name)return;
     const order=S.members.reduce((a,m)=>Math.max(a,m.order||0),0)+1,ref=db.collection('members').doc();
     S.members.push({id:ref.id,name,order});render();$('#newMember')?.focus();try{await ref.set({name,order})}catch(err){fail(err)}return}
@@ -712,7 +735,13 @@ $('#view').addEventListener('change',e=>{
 window.addEventListener('pageshow',e=>{if(e.persisted)location.reload()});
 try{tab=localStorage.getItem('gg-tab')||tab}catch(_){}
 if(!['standings','draft','scores','league'].includes(tab))tab='standings';
-function rerender(){const a=document.activeElement;if(a&&a.closest?.('#view')&&a.matches('input,select'))return;render()}
+let rerenderWaiting=false;
+function rerender(){
+  const a=document.activeElement;
+  if(a&&a.closest?.('#view')&&a.matches('select')){if(!rerenderWaiting){rerenderWaiting=true;a.addEventListener('blur',()=>{rerenderWaiting=false;render()},{once:true})}return}
+  if(a&&a.closest?.('#view')&&a.matches('input')&&a.id){const id=a.id,val=a.value,ss=a.selectionStart,se=a.selectionEnd;render();
+    const b=document.getElementById(id);if(b){b.value=val;b.focus();try{b.setSelectionRange(ss,se)}catch(_){}}return}
+  render()}
 (async()=>{
   try{db=await connect()}catch(err){console.warn(err);ready=true;
     $('#syncLine').textContent='Not connected';
