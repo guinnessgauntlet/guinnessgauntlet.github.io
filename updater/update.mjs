@@ -6,13 +6,27 @@
 //   • F1 drivers' championship standings (Jolpica / Ergast)
 //   • golf major finishes and tennis Grand Slam results (ESPN)
 // and writes them to Firestore for the site.
+// It handles every Gauntlet season that's still running (when season N+1 starts in March, season N
+// keeps scoring until June). Season 1 uses seasons.json; later seasons work out their own years.
 // Locally: `node update.mjs --dry-run` prints what it found without writing anything.
 import fs from 'node:fs/promises';
 
 const DRY = process.argv.includes('--dry-run');
 const FIXTURES = process.env.GG_FIXTURES || null; // folder of saved JSON responses, for testing
 const NOW = process.env.GG_NOW ? new Date(process.env.GG_NOW) : new Date();
-const seasons = JSON.parse(await fs.readFile(new URL('./seasons.json', import.meta.url), 'utf8'));
+const SEASON1 = JSON.parse(await fs.readFile(new URL('./seasons.json', import.meta.url), 'utf8'));
+// Years each league counts in Gauntlet season k. Season k (2+) starts at MLB opening day of year Y = 2025 + k:
+// NFL/EPL seasons starting in Y, NBA/NHL seasons ending in Y+1, MLB/F1/golf in Y,
+// tennis French Open, Wimbledon and US Open in Y plus the next Australian Open (Y+1).
+// Season 1 (2026–27) only had the Australian Open 2027.
+function yearsFor(k) {
+  if (k === 1) return { ...SEASON1, slams: [SEASON1.tennis, null, null, null] };
+  const Y = 2025 + k;
+  return { nfl: Y, nba: Y + 1, nhl: Y + 1, mlb: Y, epl: Y, f1: Y, golf: Y, tennis: Y, slams: [Y + 1, Y, Y, Y] };
+}
+const seasonEnd = k => (k === 1 ? '20270620' : `${2026 + k}0620`);
+const prefix = k => (k === 1 ? '' : `s${k}~`);
+let seasons = yearsFor(1); // the season being processed (set in main)
 const ESPN = 'https://site.api.espn.com/apis';
 
 const LEAGUES = {
@@ -184,7 +198,7 @@ async function fetchGolf() {
     results.push({ name: ev.name, map, field: comps.length });
   }
   const got = results.filter(Boolean);
-  if (!got.length) { log('Golf: no 2027 majors finished yet.'); return null; }
+  if (!got.length) { log(`Golf: no ${year} majors finished yet.`); return null; }
   log(`Golf: ${got.map(r => `${r.name} (${r.field} players)`).join(', ')}`);
   return results;
 }
@@ -200,8 +214,10 @@ function tennisRound(text) {
 }
 const CODES = ['', 'R128', 'R64', 'R32', 'R16', 'QF', 'SF', 'F'];
 async function fetchTennis() {
-  const year = seasons.tennis, out = [];
+  const out = [];
   for (let i = 0; i < 4; i++) {
+    const year = seasons.slams[i];
+    if (!year) { out.push(null); continue; } // this Slam belongs to another Gauntlet season
     const [a, b] = SLAMS[i].win(year);
     if (today < a) { out.push(null); continue; }
     const res = new Map(); let finalDone = false, found = false;
@@ -231,16 +247,16 @@ async function fetchTennis() {
     }
     out.push(found ? { map: res, complete: finalDone || today > b } : null);
   }
-  if (!out.some(Boolean)) { log('Tennis: no 2027 Slams underway yet.'); return null; }
+  if (!out.some(Boolean)) { log('Tennis: no Slams for this season underway yet.'); return null; }
   return out;
 }
 
 /* ---------- today's games (backup for the site's Games tab) ---------- */
-async function fetchScoreboards() {
+async function fetchScoreboards(ids = Object.keys(LEAGUES)) {
   const d = new Date(NOW.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
   const date = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
   const out = { at: NOW.toISOString() };
-  for (const [id, L] of Object.entries(LEAGUES)) {
+  for (const [id, L] of Object.entries(LEAGUES).filter(([id]) => ids.includes(id))) {
     try {
       const j = await getJSON(`${ESPN}/site/v2/sports/${L.path}/scoreboard?dates=${date}`, id + '-today');
       const events = (j?.events || []).map(ev => {
@@ -294,21 +310,40 @@ async function main() {
     admin.initializeApp({ credential: admin.credential.cert(JSON.parse(raw)) });
     db = admin.firestore();
   }
-  const picks = db ? (await db.collection('picks').get()).docs.map(d => d.data()) : JSON.parse(process.env.GG_PICKS || '[]');
+  const allPicks = db ? (await db.collection('picks').get()).docs.map(d => d.data()) : JSON.parse(process.env.GG_PICKS || '[]');
+  const configs = {};
+  if (db) (await db.collection('config').get()).docs.forEach(d => { configs[d.id] = d.data(); });
+  else Object.assign(configs, JSON.parse(process.env.GG_CONFIG || '{}'));
+  const current = Math.max(1, Number(configs.main?.current) || 1);
+  // Score the current season and the one before it while it's still finishing (two weeks of slack after June 20).
+  const endPlus = k => { const d = new Date(`${seasonEnd(k).slice(0, 4)}-${seasonEnd(k).slice(4, 6)}-${seasonEnd(k).slice(6)}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 14); return ymd(d); };
+  let active = [current - 1, current].filter(k => k >= 1 && today <= endPlus(k));
+  if (!active.length) active = [current];
   const existing = new Map();
   if (db) (await db.collection('results').get()).docs.forEach(d => existing.set(d.id, d.data()));
 
-  const writes = [], updated = [], problems = [];
-  const put = (id, fields) => {
-    const old = existing.get(id);
-    if (old?.manual) for (const k of ['stage', 'pos', 'res']) if (k in fields && (k !== 'pos' || fields.sport === 'golf')) delete fields[k];
-    if (differs(fields, old)) writes.push(['results/' + id, fields]);
-  };
+  const writes = [], updated = [], problems = [], usedLeagues = new Set();
   const guard = async (label, fn) => { try { return await fn(); } catch (e) { log(`${label}: ${e.message}`); problems.push(`${label} feed down`); return null; } };
+  const DEFAULT_ON = { nfl: true, nba: true, nhl: true, epl: true, tennis: true }; // season 1's original lineup
+
+  for (const k of active) {
+  seasons = yearsFor(k);
+  const P = prefix(k), tag = active.length > 1 ? `S${k} ` : '';
+  const cfg = configs[k === 1 ? 'main' : `s${k}`] || {};
+  const picks = allPicks.filter(p => (p.season || 1) === k);
+  const on = cfg.sportsOn || (k === 1 ? DEFAULT_ON : { nfl: 1, nba: 1, nhl: 1, mlb: 1, epl: 1, f1: 1, golf: 1, tennis: 1 });
+  const wanted = sp => !!on[sp] || picks.some(p => p.sport === sp);
+  console.log(`Season ${k}${k === 1 ? '' : ` (years from ${2025 + k})`}: ${['nfl', 'nba', 'nhl', 'mlb', 'epl', 'f1', 'golf', 'tennis'].filter(wanted).join(', ')}`);
+  const put = (id, fields) => {
+    const full = P + id, old = existing.get(full);
+    if (old?.manual) for (const key of ['stage', 'pos', 'res']) if (key in fields && (key !== 'pos' || fields.sport === 'golf')) delete fields[key];
+    if (differs(fields, old)) writes.push(['results/' + full, fields]);
+  };
 
   // Team leagues + F1
-  for (const sport of [...Object.keys(LEAGUES), 'f1']) {
-    const label = LEAGUES[sport]?.label || 'F1';
+  for (const sport of [...Object.keys(LEAGUES), 'f1'].filter(wanted)) {
+    if (LEAGUES[sport]) usedLeagues.add(sport);
+    const label = tag + (LEAGUES[sport]?.label || 'F1');
     const data = await guard(label, () => sport === 'f1' ? fetchF1() : fetchLeague(sport));
     if (!data) continue;
     const post = sport !== 'f1' && LEAGUES[sport].post ? await guard(label + ' playoffs', () => fetchPlayoffs(sport)) : null;
@@ -328,29 +363,29 @@ async function main() {
       if (worst.has(hit)) worst.add(p.team);
     }
     for (const [id, f] of docs) put(id, f);
-    writes.push(['meta/' + sport, { best: [...best], worst: [...worst], teams: data.rows.length, season: seasons[sport], done: !!(data.done || (post && post.stage.size)), ...(sport === 'f1' ? { round: data.round, total: data.total } : {}) }]);
+    writes.push(['meta/' + P + sport, { best: [...best], worst: [...worst], teams: data.rows.length, season: seasons[sport], done: !!(data.done || (post && post.stage.size)), ...(sport === 'f1' ? { round: data.round, total: data.total } : {}) }]);
     updated.push(label);
     const champ = post ? [...post.stage].filter(([, s]) => s === 5).map(([t]) => t)[0] : null;
     log(`${label}: ${data.rows.length} rows, best: ${[...best].join(' / ') || '—'}, season over: ${data.done ? 'yes' : 'no'}${post ? `, ${post.stage.size} playoff teams${champ ? ', champion ' + champ : ''}` : ''}`);
   }
 
   // Golf
-  const golf = await guard('Golf', fetchGolf);
+  const golf = wanted('golf') ? await guard(tag + 'Golf', fetchGolf) : null;
   if (golf) {
     for (const p of picks.filter(p => p.sport === 'golf')) {
-      const id = rid('golf', p.team), pos = [...(existing.get(id)?.pos || ['', '', '', ''])];
+      const id = rid('golf', p.team), pos = [...(existing.get(P + id)?.pos || ['', '', '', ''])];
       golf.forEach((m, i) => { if (!m) return; const hit = matchName(m.map.keys(), p.team); pos[i] = hit ? m.map.get(hit) : 'MC'; if (!hit) log(`Golf: ${p.team} not in the ${m.name} field (counted as missed cut).`); });
       put(id, { sport: 'golf', team: p.team, pos });
     }
-    writes.push(['meta/golf', { field: golf.map(m => m?.field || null), season: seasons.golf }]);
-    updated.push('Golf');
+    writes.push(['meta/' + P + 'golf', { field: golf.map(m => m?.field || null), season: seasons.golf }]);
+    updated.push(tag + 'Golf');
   }
 
   // Tennis
-  const tennis = await guard('Tennis', fetchTennis);
+  const tennis = wanted('tennis') ? await guard(tag + 'Tennis', fetchTennis) : null;
   if (tennis) {
     for (const p of picks.filter(p => p.sport === 'tennis')) {
-      const id = rid('tennis', p.team), res = [...(existing.get(id)?.res || ['', '', '', ''])];
+      const id = rid('tennis', p.team), res = [...(existing.get(P + id)?.res || ['', '', '', ''])];
       tennis.forEach((s, i) => {
         if (!s) return;
         const hit = matchName(s.map.keys(), p.team);
@@ -359,23 +394,25 @@ async function main() {
       });
       put(id, { sport: 'tennis', team: p.team, res });
     }
-    updated.push('Tennis');
+    updated.push(tag + 'Tennis');
   }
 
   // Last season's results, used by the site to project this season during the draft
   const prev = {};
-  for (const sport of Object.keys(LEAGUES)) {
+  for (const sport of Object.keys(LEAGUES).filter(wanted)) {
     const L = LEAGUES[sport];
-    const d = await guard(L.label + ' last season', () => fetchLeague(sport, seasons[sport] - 1));
+    const d = await guard(tag + L.label + ' last season', () => fetchLeague(sport, seasons[sport] - 1));
     if (!d) continue;
     prev[sport] = Object.fromEntries(d.rows.map(r => { const gp = r.w + r.l + r.x; return [r.team, gp ? +((r.w + (L.xw || 0) * r.x) / gp).toFixed(4) : 0.5]; }));
   }
-  const f1prev = await guard('F1 last season', () => fetchF1(seasons.f1 - 1));
+  const f1prev = wanted('f1') ? await guard(tag + 'F1 last season', () => fetchF1(seasons.f1 - 1)) : null;
   if (f1prev) { const N = f1prev.rows.length; prev.f1 = Object.fromEntries(f1prev.rows.map(r => [r.team, N > 1 && r.pos ? +((N - r.pos) / (N - 1)).toFixed(4) : 0.5])); }
-  if (Object.keys(prev).length) { writes.push(['meta/prev', prev]); log(`Last season: ${Object.entries(prev).map(([k, v]) => `${k} ${Object.keys(v).length}`).join(', ')}`); }
+  if (Object.keys(prev).length) { writes.push(['meta/' + P + 'prev', prev]); log(`${tag}Last season: ${Object.entries(prev).map(([k, v]) => `${k} ${Object.keys(v).length}`).join(', ')}`); }
+
+  } // end of season loop
 
   // Today's games
-  const boards = await guard('Games', fetchScoreboards);
+  const boards = await guard('Games', () => fetchScoreboards([...usedLeagues]));
   if (boards) { writes.push(['meta/scoreboard', boards]); log(`Games today: ${Object.entries(boards).filter(([k]) => k !== 'at').map(([k, v]) => `${k} ${v.events.length}`).join(', ')}`); }
 
   // Logos
