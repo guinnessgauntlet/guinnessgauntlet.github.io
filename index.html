@@ -150,7 +150,7 @@ textarea{font:inherit;color:var(--cream);background:var(--panel2);border:1px sol
 .games{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
 .game{border:1px solid var(--rule);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:4px;background:var(--panel)}
 .game.ours{border-color:var(--amber);background:var(--panel2)}
-.gstatus{font-size:12px;color:var(--muted)}.gstatus.live{color:var(--good);font-weight:600}
+.gstatus{font-size:12px;color:var(--muted)}.glg{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--rule);border-radius:4px;padding:0 5px;margin-right:6px;color:var(--cream)}.gstatus.live{color:var(--good);font-weight:600}
 .gside{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:8px;align-items:center}
 .gside .gname{min-width:0}.gside.won .gname,.gside.won .gscore{font-weight:700}
 .gscore{font-size:16px}
@@ -513,7 +513,8 @@ function viewTimeline(){
    Reads ESPN's public scoreboards straight from the browser; falls back to the hourly copy the updater saves. */
 const GAME_PATHS={nfl:'football/nfl',nba:'basketball/nba',nhl:'hockey/nhl',mlb:'baseball/mlb',epl:'soccer/eng.1'};
 const ymdLocal=d=>d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
-let gamesDay=0,onlyOurs=true,G={},gamesTimer=null,gamesLoading=false;
+let gamesDay=0,onlyOurs=true,G={},gamesTimer=null,gamesLoading=false,gamesByTime=false;
+try{gamesByTime=localStorage.getItem('gg-gamesort')==='time'}catch(_){}
 function ownersOf(sport,team){const p=slug(team),ks=liveSeasons().length?liveSeasons():[viewSeason],tag=ks.length>1,out=[];
   for(const k of ks)for(const m of S.members)if(S.allPicks.some(x=>(x.season||1)===k&&x.member===m.id&&x.sport===sport&&(slug(x.team)===p||p.endsWith('-'+slug(x.team))||slug(x.team).endsWith('-'+p))))out.push({...m,_season:k,_tag:tag?` · S${k}`:''});
   return out}
@@ -536,16 +537,24 @@ function viewGames(){
   const label=gamesDay===0?'Today':gamesDay===-1?'Yesterday':gamesDay===1?'Tomorrow':day.toLocaleDateString([], {weekday:'short',month:'short',day:'numeric'});
   const head=`<section class="panel"><div class="cardhead"><h2>${label}</h2><span class="small muted">${day.toLocaleDateString([], {weekday:'long',month:'long',day:'numeric'})}</span></div>
     <div class="row" style="justify-content:space-between;align-items:center"><div class="row"><button class="btn ghost small" data-gday="-1">← Prev day</button><button class="btn ghost small" data-gday="0"${gamesDay===0?' disabled':''}>Today</button><button class="btn ghost small" data-gday="1">Next day →</button></div>
-    <label class="row small" style="align-items:center;gap:6px"><input type="checkbox" id="onlyOurs" data-onlyours${onlyOurs?' checked':''}> Only games with our teams</label></div></section>`;
-  const blocks=sports.map(c=>{const g=G[c.id];if(!g||g.key!==key)return `<section class="panel"><h3>${esc(c.name)}</h3><p class="small muted">Loading…</p></section>`;
-    let evs=g.events.map(e=>({...e,ao:ownersOf(c.id,e.away.name),ho:ownersOf(c.id,e.home.name)}));const total=evs.length;
-    if(onlyOurs)evs=evs.filter(e=>e.ao.length||e.ho.length);
-    evs.sort((a,b)=>({in:0,pre:1,post:2}[a.state]-{in:0,pre:1,post:2}[b.state])||Date.parse(a.date)-Date.parse(b.date));
-    const owner=list=>list.length?`<span class="owners">${list.map(m=>`<span class="owner">${esc(teamOf(m,m._season||viewSeason)||m.name)}${m._tag||''}</span>`).join('')}</span>`:'';
+    <div class="row" style="align-items:center"><div class="chips"><button class="chip" data-gsort="league" aria-pressed="${!gamesByTime}">By league</button><button class="chip" data-gsort="time" aria-pressed="${gamesByTime}">By start time</button></div>
+    <label class="row small" style="align-items:center;gap:6px"><input type="checkbox" id="onlyOurs" data-onlyours${onlyOurs?' checked':''}> Only games with our teams</label></div></div></section>`;
+  const owner=list=>list.length?`<span class="owners">${list.map(m=>`<span class="owner">${esc(teamOf(m,m._season||viewSeason)||m.name)}${m._tag||''}</span>`).join('')}</span>`:'';
     const side=(t,o,pre)=>`<div class="gside${t.winner?' won':''}">${t.logo?`<img class="logo" src="${esc(t.logo)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`:'<span class="logo"></span>'}<span class="gname">${esc(t.name)}${owner(o)}</span><span class="gscore num">${pre?'':esc(t.score)}</span></div>`;
     const status=e=>e.state==='pre'?new Date(e.date).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):e.detail;
+    const gameHtml=(e,lg)=>`<div class="game${e.ao.length||e.ho.length?' ours':''}"><div class="gstatus${e.state==='in'?' live':''}">${lg?`<span class="glg">${esc(lg)}</span>`:''}${e.state==='in'?'● ':''}${esc(status(e))}${e.note?` · ${esc(e.note)}`:''}</div>${side(e.away,e.ao,e.state==='pre')}${side(e.home,e.ho,e.state==='pre')}</div>`;
+    const lists=sports.map(c=>{const g=G[c.id];if(!g||g.key!==key)return {c,loading:true};
+      let evs=g.events.map(e=>({...e,c,ao:ownersOf(c.id,e.away.name),ho:ownersOf(c.id,e.home.name)}));const total=evs.length;
+      if(onlyOurs)evs=evs.filter(e=>e.ao.length||e.ho.length);return {c,g,evs,total}});
+    if(gamesByTime){const all=lists.flatMap(l=>l.evs||[]).sort((a,b)=>Date.parse(a.date)-Date.parse(b.date)||a.c.short.localeCompare(b.c.short));
+      const loading=lists.filter(l=>l.loading).map(l=>l.c.short);
+      const body=`<section class="panel"><div class="cardhead"><h3>All games by start time</h3><span class="small muted">${all.length} game${all.length===1?'':'s'}${loading.length?' · loading '+loading.join(', '):''}</span></div>
+        ${all.length?`<div class="games">${all.map(e=>gameHtml(e,e.c.short)).join('')}</div>`:`<p class="small muted">${onlyOurs?'No games with drafted teams.':'No games on this day.'}</p>`}</section>`;
+      return head+(sports.length?body:'<div class="notice">No team leagues are in this season yet.</div>')+'<p class="small muted">Scores refresh about every minute while this tab is open. Golf, tennis and F1 aren’t listed here.</p>'}
+  const blocks=lists.map(({c,g,evs,total,loading})=>{if(loading)return `<section class="panel"><h3>${esc(c.name)}</h3><p class="small muted">Loading…</p></section>`;
+    evs.sort((a,b)=>({in:0,pre:1,post:2}[a.state]-{in:0,pre:1,post:2}[b.state])||Date.parse(a.date)-Date.parse(b.date));
     return `<section class="panel"><div class="cardhead"><h3>${esc(c.name)}</h3><span class="small muted">${total?`${total} game${total===1?'':'s'}`:'No games'}${g.failed?' · couldn’t load':!g.live&&g.at?' · as of '+new Date(g.at).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):''}</span></div>
-      ${evs.length?`<div class="games">${evs.map(e=>`<div class="game${e.ao.length||e.ho.length?' ours':''}"><div class="gstatus${e.state==='in'?' live':''}">${e.state==='in'?'● ':''}${esc(status(e))}${e.note?` · ${esc(e.note)}`:''}</div>${side(e.away,e.ao,e.state==='pre')}${side(e.home,e.ho,e.state==='pre')}</div>`).join('')}</div>`
+      ${evs.length?`<div class="games">${evs.map(e=>gameHtml(e)).join('')}</div>`
         :`<p class="small muted">${total&&onlyOurs?'No games with drafted teams.':'No games on this day.'}</p>`}</section>`}).join('');
   return head+(sports.length?blocks:'<div class="notice">No team leagues are in this season yet.</div>')+'<p class="small muted">Scores refresh about every minute while this tab is open. Golf, tennis and F1 aren’t listed here.</p>';
 }
@@ -960,6 +969,7 @@ $('#view').addEventListener('click',async e=>{
   const t=e.target.closest('button,tr[data-open]');if(!t)return;const ds=t.dataset;
   if(ds.go){tab=ds.go;render();return}
   if(ds.season){switchSeason(+ds.season);return}
+  if(ds.gsort){gamesByTime=ds.gsort==='time';try{localStorage.setItem('gg-gamesort',ds.gsort)}catch(_){}render();return}
   if(ds.gday!==undefined){gamesDay=ds.gday==='0'?0:gamesDay+Number(ds.gday);render();return}
   if(ds.tl){tlNote=ds.tl;const n=document.getElementById('tlNote');if(n)n.textContent=tlNote;return}
   if(ds.open){openRow=openRow===ds.open?null:ds.open;render();return}
