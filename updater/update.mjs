@@ -18,7 +18,7 @@ const ESPN = 'https://site.api.espn.com/apis';
 const LEAGUES = {
   nfl: { label: 'NFL', path: 'football/nfl', x: ['ties'], xw: 0.5, games: 17, post: s => [`${s + 1}0101`, `${s + 1}0220`], need: [0, 1, 1, 1, 1] },
   nba: { label: 'NBA', path: 'basketball/nba', games: 82, post: s => [`${s}0410`, `${s}0630`], need: [0, 4, 4, 4, 4] },
-  nhl: { label: 'NHL', path: 'hockey/nhl', x: ['otlosses', 'overtimelosses', 'otl'], xw: 0.5, games: 82, post: s => [`${s}0410`, `${s}0630`], need: [0, 4, 4, 4, 4] },
+  nhl: { label: 'NHL', path: 'hockey/nhl', x: ['otlosses', 'overtimelosses', 'otl'], xw: 0.5, games: 84, post: s => [`${s}0410`, `${s}0630`], need: [0, 4, 4, 4, 4] },
   mlb: { label: 'MLB', path: 'baseball/mlb', games: 162, slack: 2, post: s => [`${s}0925`, `${s}1110`], need: [0, 2, 3, 4, 4] },
   epl: { label: 'EPL', path: 'soccer/eng.1', x: ['ties', 'draws'], xw: 1 / 3, games: 38, table: true },
 };
@@ -235,6 +235,25 @@ async function fetchTennis() {
   return out;
 }
 
+/* ---------- today's games (backup for the site's Games tab) ---------- */
+async function fetchScoreboards() {
+  const d = new Date(NOW.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+  const date = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  const out = { at: NOW.toISOString() };
+  for (const [id, L] of Object.entries(LEAGUES)) {
+    try {
+      const j = await getJSON(`${ESPN}/site/v2/sports/${L.path}/scoreboard?dates=${date}`, id + '-today');
+      const events = (j?.events || []).map(ev => {
+        const c = ev.competitions?.[0] || {}, st = c.status || ev.status || {};
+        const side = k => { const x = (c.competitors || []).find(t => t.homeAway === k) || {}; return { name: x.team?.displayName || '', logo: x.team?.logo || '', score: x.score ?? '', winner: !!x.winner }; };
+        return { id: ev.id, date: ev.date, state: st.type?.state || 'pre', detail: st.type?.shortDetail || '', note: c.notes?.[0]?.headline || '', away: side('away'), home: side('home') };
+      });
+      out[id] = { date, events };
+    } catch (e) { log(`${L.label} games: ${e.message}`); }
+  }
+  return out;
+}
+
 /* ---------- team logos ---------- */
 // ESPN's team lists include logos even before a season starts. Prefer the version made for dark backgrounds.
 async function fetchLogos() {
@@ -354,6 +373,10 @@ async function main() {
   const f1prev = await guard('F1 last season', () => fetchF1(seasons.f1 - 1));
   if (f1prev) { const N = f1prev.rows.length; prev.f1 = Object.fromEntries(f1prev.rows.map(r => [r.team, N > 1 && r.pos ? +((N - r.pos) / (N - 1)).toFixed(4) : 0.5])); }
   if (Object.keys(prev).length) { writes.push(['meta/prev', prev]); log(`Last season: ${Object.entries(prev).map(([k, v]) => `${k} ${Object.keys(v).length}`).join(', ')}`); }
+
+  // Today's games
+  const boards = await guard('Games', fetchScoreboards);
+  if (boards) { writes.push(['meta/scoreboard', boards]); log(`Games today: ${Object.entries(boards).filter(([k]) => k !== 'at').map(([k, v]) => `${k} ${v.events.length}`).join(', ')}`); }
 
   // Logos
   const logos = await guard('Logos', fetchLogos);
