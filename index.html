@@ -130,18 +130,31 @@ textarea{font:inherit;color:var(--cream);background:var(--panel2);border:1px sol
 .tl-bar{position:absolute;top:9px;height:12px;border:0;border-radius:3px;padding:0;cursor:pointer;background:var(--amber);opacity:.45}
 .tl-bar.post{opacity:1}
 .tl-bar:hover,.tl-bar:focus-visible{outline:2px solid var(--cream);outline-offset:1px}
-.tl-lines{position:absolute;top:22px;bottom:40px;left:64px;right:0;pointer-events:none}
+.tl-lines{position:absolute;top:22px;bottom:40px;left:64px;right:56px;pointer-events:none}
 .tl-line{position:absolute;top:0;bottom:0;border-left:1px solid var(--muted)}
-.tl-line span{position:absolute;bottom:-17px;left:3px;font-size:10px;color:var(--muted);white-space:nowrap}
+.tl-line span{position:absolute;bottom:-17px;left:0;transform:translateX(-50%);font-size:10px;line-height:14px;color:var(--muted);white-space:nowrap;background:var(--panel);padding:0 4px}
+.tl-line::after{content:'';position:absolute;left:-1px;top:100%;height:24px;border-left:1px solid var(--muted)}
+.tl-line.r1::after{height:40px}
+.tl-line.dotted::after{left:-2px;border-left:2px dotted var(--amber)}
+.tl-line.today::after{left:-2px;border-left:2px solid var(--cream)}
+.tl-line.end::after{left:-2px;border-left:2px solid var(--amber)}
+.tl-line span{z-index:1}
 .tl-line.r1 span{bottom:-33px}
 .tl-line.dotted{border-left:2px dotted var(--amber)}
 .tl-line.dotted span{color:var(--amber);font-weight:600}
 .tl-line.today{border-left:2px solid var(--cream)}
 .tl-line.end{border-left:2px solid var(--amber)}
 .tl-row.other{opacity:.35}
-.tl-line.end span{color:var(--amber);font-weight:700;left:auto;right:3px}
+.chart{width:100%;height:auto;display:block}
+.chart text{fill:var(--muted);font-size:11px;font-family:inherit}
+.chart .grid{stroke:var(--rule);stroke-width:1}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;margin-top:8px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:14px;height:3px;border-radius:2px;display:inline-block}
+.rough{color:var(--amber);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.tl-line.end span{color:var(--amber);font-weight:700}
 .tl-line.today span{color:var(--cream);font-weight:700}
-.tl{padding-bottom:40px}
+.tl{padding-bottom:40px;padding-right:56px}
 .needs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 .need{border:1px dashed var(--rule);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:3px;font-size:14px}
 .need.done{border-style:solid;background:var(--panel2)}
@@ -176,7 +189,7 @@ textarea{font:inherit;color:var(--cream);background:var(--panel2);border:1px sol
   table.roster.dense .logo.sm{width:14px;height:14px;margin-right:4px}
   table.roster.dense .flag.sm{font-size:13px;margin-right:4px}
 }
-@media (max-width:520px){.head h1{font-size:44px}.clock .who{font-size:32px}nav button{font-size:18px;padding:10px 9px 7px}.rules dl{grid-template-columns:1fr}.rules dd{margin-bottom:6px}}
+@media (max-width:520px){.head h1{font-size:44px}.clock .who{font-size:32px}nav button{font-size:16px;padding:10px 7px 7px}.rules dl{grid-template-columns:1fr}.rules dd{margin-bottom:6px}}
 @media (prefers-reduced-motion:no-preference){.chip,.team,nav button{transition:background .15s,border-color .15s,color .15s}}
 </style>
 </head>
@@ -192,6 +205,7 @@ textarea{font:inherit;color:var(--cream);background:var(--panel2);border:1px sol
   <button id="tab-games" role="tab" data-tab="games" aria-selected="false">Games</button>
   <button id="tab-draft" role="tab" data-tab="draft" aria-selected="false">Draft</button>
   <button id="tab-scores" role="tab" data-tab="scores" aria-selected="false">Scores</button>
+  <button id="tab-stats" role="tab" data-tab="stats" aria-selected="false">Stats</button>
   <button id="tab-league" role="tab" data-tab="league" aria-selected="false">League</button>
 </div></nav>
 <main class="in" id="view"><div class="notice">Loading the league…</div></main>
@@ -457,8 +471,9 @@ function render(){
   if(!ready)return;
   const others=liveSeasons().filter(k=>k!==viewSeason);
   const banner=others.length?`<div class="notice" style="color:var(--cream)">${others.map(k=>k<viewSeason?`Season ${k} is still finishing (it ends around ${fmtDay(seasonEnd(k))}). <button class="btn ghost small" data-season="${k}">View season ${k}</button>`:`Season ${k} has started. <button class="btn ghost small" data-season="${k}">View season ${k}</button>`).join(' ')}</div>`:'';
-  $('#view').innerHTML=(tab==='games'?'':banner)+({standings:viewStandings,games:viewGames,draft:viewDraft,scores:viewScores,league:viewLeague}[tab])();
+  $('#view').innerHTML=(tab==='games'?'':banner)+({standings:viewStandings,games:viewGames,draft:viewDraft,scores:viewScores,stats:viewStats,league:viewLeague}[tab])();
   tick();
+  setTimeout(saveSnapshots,0);
 }
 const slamCols=def=>def.kind==='tennis'&&viewSeason===1?[0]:[0,1,2,3];
 /* Season timeline: one bar per sport (regular season lighter, playoffs solid), key dates, today, next draft. */
@@ -563,12 +578,17 @@ function viewGames(){
    The standings then show places and points gained since that snapshot. */
 function weekKey(){const d=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Chicago'}));const day=(d.getDay()+6)%7;d.setDate(d.getDate()-day);
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
-let snapTried='';const loaded={};
-function saveWeekSnapshot(rows,ranks){const k=weekKey();if(!db||!ready||!loaded.results||!loaded.history||S.history[k]||snapTried===P(viewSeason)+k)return;snapTried=P(viewSeason)+k;
-  const doc={at:new Date().toISOString(),ranks,totals:Object.fromEntries(rows.map(r=>[r.m.id,Math.round(r.total*10)/10]))};
-  db.doc('history/'+P(viewSeason)+k).set(doc).catch(()=>{})}
-function weekBaseline(){const k=weekKey(),h=S.history[k];if(!h)return null;
-  const d=new Date(k+'T12:00:00');return {...h,label:'Monday '+d.toLocaleDateString([], {month:'short',day:'numeric'})}}
+/* Daily snapshots (first visit each day, Central time) feed the Stats graph; the weekly column compares with the first snapshot of the week. */
+function dayKey(){const d=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Chicago'}));return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+let snapTried='';const loaded={},snapDone={};
+function rankMap(rows){const ranks={};let prev=null,rank=0;rows.forEach((r,i)=>{if(r.total!==prev){rank=i+1;prev=r.total}ranks[r.m.id]=rank});return ranks}
+function saveSnapshots(){if(!db||!ready||!loaded.results||!loaded.history||!canWrite)return;const k=dayKey();
+  for(const sk of (liveSeasons().length?liveSeasons():[viewSeason])){const id=P(sk)+k;if(snapDone[id]||S.historyAll[id])continue;snapDone[id]=1;
+    const rows=standingsFor(sk);if(!rows.length)continue;
+    db.doc('history/'+id).set({at:new Date().toISOString(),ranks:rankMap(rows),totals:Object.fromEntries(rows.map(r=>[r.m.id,Math.round(r.total*10)/10]))}).catch(()=>{})}}
+function saveWeekSnapshot(){saveSnapshots()}
+function weekBaseline(){const wk=weekKey(),k=Object.keys(S.history).filter(x=>/^\d{4}-\d\d-\d\d$/.test(x)&&x>=wk).sort()[0],h=k&&S.history[k];if(!h)return null;
+  const d=new Date(k+'T12:00:00');return {...h,label:d.toLocaleDateString([], {weekday:'long',month:'short',day:'numeric'})}}
 function standingsFor(k){if(k===viewSeason)return S.picks.length?standings():[];
   const keep=viewSeason,saved={cfg:S.cfg,draft:S.draft,picks:S.picks,results:S.results,meta:S.meta,history:S.history};
   viewSeason=k;S.cfg=cfgFor(k);S.draft=S.drafts[k]||{status:'setup',order:[]};S.picks=S.allPicks.filter(p=>(p.season||1)===k);
@@ -780,6 +800,79 @@ function seasonsPanel(){const N=curSeason();
    <p class="small muted">Each season has its own draft, teams, settings and standings. Season ${N+1} starts with MLB opening day ${seasonYear(N+1)}; season ${N} keeps scoring until its last trophy in June.</p>
    ${isCommish?`<div><button class="btn ghost" data-act="newSeason">Start season ${N+1}</button></div>
    ${confirmKey==='newSeason'?`<div class="confirm"><span>Create season ${N+1} (${seasonLabel(N+1)})? Season ${N} stays as it is and keeps scoring. Everyone, team names and re-picks carry over per season.</span><button class="btn" data-yes="newSeason">Create it</button><button class="btn ghost" data-no>Not yet</button></div>`:''}`:''}</section>`}
+/* ================= Stats: rough projections and standings over time ================= */
+const PLAYOFF_CUT={nfl:14,nba:16,nhl:16,mlb:12};
+// Rough postseason value by projected league rank (playoff + best record/spoon), before the playoffs start.
+function expBonus(sp,rank,N){
+  if(sp.kind==='table'||sp.kind==='f1')return ladder(posStage(sp.id,rank))+(rank===1?B('best'):0)-(sp.kind==='table'?(rank>=18?B('spoon'):0):(rank===N?B('spoon'):0));
+  const cut=PLAYOFF_CUT[sp.id]||16,post=rank===1?20:rank===2?16:rank<=4?12:rank<=8?8:rank<=cut?B('makeIt'):0;
+  return post+(rank===1?B('best'):0)-(rank===N?B('spoon'):0)}
+// Title odds from the updater (ESPN futures, bookmaker margin removed). Matched by name like the other feeds.
+function oddsOf(sport,team){const m=S.meta[sport]?.titleOdds;if(!m)return null;if(m[team])return m[team];
+  const p=slug(team),k=Object.keys(m).find(k=>slug(k)===p||slug(k).endsWith('-'+p)||p.endsWith('-'+slug(k)));return k?m[k]:null}
+const fmtPct=p=>p>=.995?'99%':p<.01?'<1%':Math.round(p*100)+'%';
+function nonTitle(sp,rank){const cut=PLAYOFF_CUT[sp.id]||16;return rank<=2?12:rank<=4?10:rank<=8?8:rank<=cut?B('makeIt')+1:0}
+function projItem(sport,team){const sp=defOf(sport);
+  if(['team','table','f1'].includes(sp.kind)){const now=teamScore(sp,team);
+    if(isDone(sp.id))return {now:now.pts,proj:now.pts,rough:now.stage>0&&now.stage<5};
+    const ranks=projRanks(sp),rank=ranks[slug(team)]||Math.ceil(teamList(sp).length/2),N=teamList(sp).length;
+    const od=sp.kind==='team'?oddsOf(sp.id,team):null;
+    // With title odds: champion value × title chance, plus a smaller playoff estimate from projected rank for the rest.
+    const bonus=od?ladder(5)*od.p+(1-od.p)*nonTitle(sp,rank)+(rank===1?B('best'):0)-(rank===N?B('spoon'):0):expBonus(sp,rank,N);
+    return {now:now.pts,proj:(projPts(sp,team)??now.season)+bonus,rough:true,rank,odds:od}}
+  if(sp.kind==='golf'){const pos=S.results[rid('golf',team)]?.pos||['','','',''],now=pos.reduce((a,v)=>a+golfPts(v),0);
+    const i=GOLFERS.findIndex(x=>slug(x)===slug(team)),per=i<0?2:i<5?12:i<15?8:i<30?5:3,left=[0,1,2,3].filter(j=>!String(pos[j]||'').trim()).length;
+    return {now,proj:now+per*left,rough:left>0}}
+  if(sp.kind==='tennis'){const res=S.results[rid('tennis',team)]?.res||[],g=groupScore(sp,[{team}]);
+    const i=TENNIS.findIndex(x=>slug(x)===slug(team)),per=i<0?4:i<3?22:i<10?12:i<25?8:5,left=slamCols(sp).filter(j=>!res[j]).length;
+    return {now:g.pts,proj:g.pts+per*left,rough:left>0}}
+  if(sp.kind==='avp'){const g=groupScore(sp,[{team}]);return {now:g.pts,proj:g.pts,rough:false,noProj:true}}
+  const now=teamScore(sp,team),r=now.r||{},settled=sp.perWin?(r.teamWon!=null&&+r.w>0):(r.stage|0)>0;
+  return {now:now.pts,proj:settled?now.pts:now.pts+(sp.perWin?3*sp.perWin.win:ladder(1))*evWeight(sp.id),rough:!settled}}
+function projections(){return S.members.map(m=>{const items=S.picks.filter(p=>p.member===m.id).map(p=>({p,...projItem(p.sport,p.team)}));
+  return {m,items,now:items.reduce((a,i)=>a+i.now,0),proj:items.reduce((a,i)=>a+i.proj,0)}}).sort((a,b)=>b.proj-a.proj)}
+let statMode='rank',statOpen=null;
+const LINE_COLORS=['#e8b04a','#6fb7e8','#e8746f','#8fd18f','#c79ae8','#e3dc72','#5fd6c8','#e8a06f','#b9b9b9','#f08fc0','#7f8fe8','#a8d65f'];
+function historyChart(){
+  const keys=Object.keys(S.history).filter(k=>/^\d{4}-\d\d-\d\d$/.test(k)).sort();
+  const today=dayKey(),rows=standings(),liveRanks=rankMap(rows);
+  const pts=[...keys.filter(k=>k!==today).map(k=>({k,...S.history[k]})),{k:today,ranks:liveRanks,totals:Object.fromEntries(rows.map(r=>[r.m.id,r.total]))}];
+  if(pts.length<2)return `<p class="small muted">The graph fills in as the site saves one snapshot a day (the first time anyone opens it). Check back in a couple of days.</p>`;
+  const W=800,H=300,L=44,Rm=12,T=12,Bm=28,ids=S.members.map(m=>m.id),byRank=statMode==='rank';
+  const t0=Date.parse(pts[0].k),t1=Date.parse(pts.at(-1).k),x=k=>L+(t1===t0?0:(Date.parse(k)-t0)/(t1-t0))*(W-L-Rm);
+  const vals=pts.flatMap(q=>ids.map(id=>byRank?q.ranks?.[id]:q.totals?.[id]).filter(v=>v!=null));
+  const lo=byRank?1:Math.min(0,...vals),hi=byRank?Math.max(2,ids.length):Math.max(10,...vals)*1.05;
+  const y=v=>byRank?T+(v-1)/(hi-1)*(H-T-Bm):T+(1-(v-lo)/(hi-lo))*(H-T-Bm);
+  const ticks=byRank?ids.map((_,i)=>i+1):[0,1,2,3,4].map(i=>lo+(hi-lo)*i/4);
+  const grid=ticks.map(v=>`<line class="grid" x1="${L}" x2="${W-Rm}" y1="${y(v)}" y2="${y(v)}"/><text x="${L-8}" y="${y(v)+4}" text-anchor="end">${byRank?ordinal(v):Math.round(v)}</text>`).join('');
+  const nX=Math.min(6,pts.length),xl=Array.from({length:nX},(_,i)=>pts[Math.round(i*(pts.length-1)/Math.max(1,nX-1))]).map((q,i,a)=>`<text x="${x(q.k)}" y="${H-8}" text-anchor="${i===0?'start':i===a.length-1?'end':'middle'}">${new Date(q.k+'T12:00:00').toLocaleDateString([], {month:'short',day:'numeric'})}</text>`).join('');
+  const myId=myMember()?.id;
+  const lines=S.members.map((m,i)=>{const c=LINE_COLORS[i%LINE_COLORS.length],seq=pts.map(q=>[q.k,byRank?q.ranks?.[m.id]:q.totals?.[m.id]]).filter(([,v])=>v!=null);if(!seq.length)return '';
+    const d=seq.map(([k,v],j)=>(j?'L':'M')+x(k).toFixed(1)+' '+y(v).toFixed(1)).join(' '),last=seq.at(-1);
+    return `<path d="${d}" fill="none" stroke="${c}" stroke-width="${m.id===myId?3.5:2}" stroke-linejoin="round" stroke-linecap="round" opacity="${myId&&m.id!==myId?.8:1}"><title>${esc(teamOf(m)||m.name)}</title></path><circle cx="${x(last[0])}" cy="${y(last[1])}" r="${m.id===myId?4.5:3.5}" fill="${c}"/>`}).join('');
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${byRank?'Place':'Points'} over time">${grid}${xl}${lines}</svg>
+    <div class="legend">${S.members.map((m,i)=>`<span><i style="background:${LINE_COLORS[i%LINE_COLORS.length]}"></i>${esc(teamOf(m)||m.name)}</span>`).join('')}</div>`}
+function titleOddsPanel(){
+  const sports=SPORTS.filter(x=>x.kind==='team'&&S.meta[x.id]?.titleOdds);if(!sports.length)return '';
+  const rows=S.members.map(m=>{const picks=S.picks.filter(p=>p.member===m.id&&sports.some(x=>x.id===p.sport)).map(p=>({p,o:oddsOf(p.sport,p.team)})).filter(x=>x.o);
+    const none=picks.reduce((a,x)=>a*(1-x.o.p),1),exp=picks.reduce((a,x)=>a+x.o.p,0);return {m,picks,any:1-none,exp}}).filter(r=>r.picks.length).sort((a,b)=>b.any-a.any);
+  const src=sports.map(x=>S.meta[x.id]).find(m=>m.oddsFrom),at=sports.map(x=>S.meta[x.id].oddsAt).filter(Boolean).sort().at(-1);
+  return `<section class="panel"><div class="cardhead"><h2>Title odds</h2><span class="small muted">${src?esc(src.oddsFrom)+' via ESPN':'Sportsbook odds'}${at?' · '+new Date(at).toLocaleDateString([], {month:'short',day:'numeric'}):''}</span></div>
+   <div class="scroll"><table><tr><th class="l">Name</th><th class="l">Teams and odds to win the title</th><th>At least one title</th><th>Titles expected</th></tr>
+   ${rows.map(r=>`<tr><td class="l">${whoHtml(r.m.id)}</td><td class="l small">${r.picks.sort((a,b)=>b.o.p-a.o.p).map(x=>`${logoImg(x.p.sport,x.p.team,'sm')}${esc(x.p.team)} <span class="muted">${esc(defOf(x.p.sport).short)} ${esc(x.o.odds)} (${fmtPct(x.o.p)})</span>`).join('<br>')}</td><td class="num total">${fmtPct(r.any)}</td><td class="num">${r.exp.toFixed(2)}</td></tr>`).join('')}</table></div>
+   <p class="small muted">Championship odds for the NFL, NBA, NHL and MLB from the sportsbook ESPN lists, refreshed hourly. The percentages remove the bookmaker’s cut so each league adds up to 100%. The projected totals above use these odds for title and playoff bonuses.</p></section>`}
+function viewStats(){
+  if(!S.picks.length)return `<div class="notice">Stats appear once this season’s draft starts.</div>`;
+  const pr=projections(),cur=rankMap(standings());
+  const rows=pr.map((r,i)=>{const open=statOpen===r.m.id,anyRough=r.items.some(it=>it.rough);
+    return `<tr class="click" data-open="stat:${r.m.id}" aria-expanded="${open}"><td class="num l">${i+1}</td><td class="l">${whoHtml(r.m.id)}</td><td class="num">${ordinal(cur[r.m.id]||0)}</td><td class="num">${f1(r.now)}</td><td class="num total">${f1(r.proj)}${anyRough?'<span class="rough"> ~</span>':''}</td></tr>`
+     +(open?`<tr class="detail"><td colspan="5"><div class="scroll"><table><tr><th class="l">Pick</th><th class="l">Sport</th><th>Now</th><th>Projected</th></tr>${r.items.sort((a,b)=>b.proj-a.proj).map(it=>`<tr><td class="l">${logoImg(it.p.sport,it.p.team,'sm')}${esc(it.p.team)}</td><td class="l">${it.p.flex?'Flex · ':''}${esc(defOf(it.p.sport).short)}${it.rank?` <span class="muted small">#${it.rank} projected${it.odds?` · ${esc(it.odds.odds)} to win it`:''}</span>`:''}</td><td class="num">${f1(it.now)}</td><td class="num">${it.noProj?'<span class="muted small">no estimate</span> ':''}${f1(it.proj)}${it.rough?'<span class="rough"> ~</span>':''}</td></tr>`).join('')}</table></div></td></tr>`:'')}).join('');
+  return `<section class="panel"><div class="cardhead"><h2>Projected finish</h2><span class="rough">Rough estimates</span></div>
+    <div class="scroll"><table><tr><th class="l">Proj</th><th class="l">Name</th><th>Place now</th><th>Points now</th><th>Projected total</th></tr>${rows}</table></div>
+    <p class="small muted">Rough, not gospel. Team sports and F1 use each pick’s full-season pace (this season blended with last season), plus best-record and wooden-spoon points from where the team is projected to rank. Playoff and title bonuses use Vegas title odds where they’re posted (NFL, NBA, NHL, MLB), and projected rank otherwise. Golf and tennis add a typical result for each major or Slam still to come, based on the player’s ranking. Special events add a small placeholder until they’re played; AVP counts only points already earned. Numbers marked ~ are still estimates. Tap a name to see each pick.</p></section>
+   ${titleOddsPanel()}
+   <section class="panel"><div class="cardhead"><h2>Over time</h2><div class="chips"><button class="chip" data-statmode="rank" aria-pressed="${statMode==='rank'}">Place</button><button class="chip" data-statmode="pts" aria-pressed="${statMode==='pts'}">Points</button></div></div>
+    ${historyChart()}</section>`}
 function viewLeague(){
   const ro=isCommish?'':' disabled',lock=S.picks.length>0;
   const members=`<section class="panel"><h2>The field</h2>
@@ -972,6 +1065,8 @@ $('#view').addEventListener('click',async e=>{
   if(ds.gsort){gamesByTime=ds.gsort==='time';try{localStorage.setItem('gg-gamesort',ds.gsort)}catch(_){}render();return}
   if(ds.gday!==undefined){gamesDay=ds.gday==='0'?0:gamesDay+Number(ds.gday);render();return}
   if(ds.tl){tlNote=ds.tl;const n=document.getElementById('tlNote');if(n)n.textContent=tlNote;return}
+  if(ds.statmode){statMode=ds.statmode;render();return}
+  if(ds.open?.startsWith('stat:')){const id=ds.open.slice(5);statOpen=statOpen===id?null:id;render();return}
   if(ds.open){openRow=openRow===ds.open?null:ds.open;render();return}
   if(ds.ssport){scoreSport=ds.ssport;render();return}
   if(ds.psport){pickSport=ds.psport;pending=null;render();return}
@@ -1085,7 +1180,7 @@ $('#view').addEventListener('change',async e=>{
 /* ================= Live data ================= */
 window.addEventListener('pageshow',e=>{if(e.persisted)location.reload()});
 try{tab=localStorage.getItem('gg-tab')||tab}catch(_){}
-if(!['standings','games','draft','scores','league'].includes(tab))tab='standings';
+if(!['standings','games','draft','scores','stats','league'].includes(tab))tab='standings';
 let rerenderWaiting=false;
 function rerender(){
   const a=document.activeElement;
