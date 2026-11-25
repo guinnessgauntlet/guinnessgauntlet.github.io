@@ -108,6 +108,27 @@ async function fetchLeague(id, seasonOverride) {
   return { rows, best, worst, done };
 }
 
+/* ---------- title odds (ESPN futures, from the sportsbooks ESPN lists) ---------- */
+// Returns { probs: {espnTeamId: chance 0–1 with the bookmaker margin removed}, american: {id: '+800'}, provider, market }.
+const american = v => { const n = Number(String(v).replace('+', '')); if (!Number.isFinite(n) || n === 0) return null; return n > 0 ? 100 / (n + 100) : -n / (-n + 100); };
+async function fetchFutures(id) {
+  const L = LEAGUES[id], [sport, league] = L.path.split('/');
+  const json = await getJSON(`https://sports.core.api.espn.com/v2/sports/${sport}/leagues/${league}/seasons/${seasons[id]}/futures?limit=200&lang=en&region=us`, id + '-futures');
+  const items = json?.items || [];
+  const market = items.find(m => m.type === 'winLeague') || items.find(m => /winner|champion|super bowl|stanley cup|world series/i.test(`${m.name} ${m.displayName}`) && !/conference|division|group|award|mvp|player/i.test(`${m.name} ${m.displayName}`));
+  if (!market) { log(`${L.label}: no title odds posted.`); return null; }
+  const fut = (market.futures || []).find(f => (f.books || []).length);
+  if (!fut) return null;
+  const raw = {}, am = {};
+  for (const b of fut.books) {
+    const ref = b.team?.$ref || ''; const tid = (ref.match(/\/teams\/(\d+)/) || [])[1]; const pr = american(b.value);
+    if (tid && pr) { raw[tid] = pr; am[tid] = String(b.value); }
+  }
+  const sum = Object.values(raw).reduce((a, b) => a + b, 0); if (!sum) return null;
+  const probs = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, v / sum]));
+  return { probs, american: am, provider: fut.provider?.name || 'sportsbook', market: market.displayName || market.name || 'Title' };
+}
+
 /* ---------- playoffs ---------- */
 // Round 1–4 from ESPN's game headline. 0 = not a counted playoff game (play-in, Pro Bowl).
 function roundOf(text) {
@@ -347,6 +368,14 @@ async function main() {
     const data = await guard(label, () => sport === 'f1' ? fetchF1() : fetchLeague(sport));
     if (!data) continue;
     const post = sport !== 'f1' && LEAGUES[sport].post ? await guard(label + ' playoffs', () => fetchPlayoffs(sport)) : null;
+    const fut = sport !== 'f1' && !data.done ? await guard(label + ' odds', () => fetchFutures(sport)) : null;
+    let titleOdds = null;
+    if (fut) {
+      titleOdds = {};
+      for (const r of data.rows) if (fut.probs[r.espnId] != null) titleOdds[r.team] = { p: +fut.probs[r.espnId].toFixed(4), odds: fut.american[r.espnId] };
+      if (!Object.keys(titleOdds).length) titleOdds = null;
+      else { const fav = Object.entries(titleOdds).sort((a, b) => b[1].p - a[1].p)[0]; log(`${label}: title odds for ${Object.keys(titleOdds).length} teams from ${fut.provider}; favorite ${fav[0]} ${fav[1].odds}`); }
+    }
     const docs = new Map();
     for (const r of data.rows) {
       const f = { sport, team: r.team, w: r.w ?? null, l: r.l ?? null, x: r.x ?? null, pos: r.pos ?? null, pts: r.pts ?? null, feed: true };
@@ -363,7 +392,7 @@ async function main() {
       if (worst.has(hit)) worst.add(p.team);
     }
     for (const [id, f] of docs) put(id, f);
-    writes.push(['meta/' + P + sport, { best: [...best], worst: [...worst], teams: data.rows.length, season: seasons[sport], done: !!(data.done || (post && post.stage.size)), ...(sport === 'f1' ? { round: data.round, total: data.total } : {}) }]);
+    writes.push(['meta/' + P + sport, { best: [...best], worst: [...worst], teams: data.rows.length, season: seasons[sport], done: !!(data.done || (post && post.stage.size)), ...(sport === 'f1' ? { round: data.round, total: data.total } : {}), titleOdds: titleOdds || null, ...(titleOdds ? { oddsFrom: fut.provider, oddsAt: NOW.toISOString() } : {}) }]);
     updated.push(label);
     const champ = post ? [...post.stage].filter(([, s]) => s === 5).map(([t]) => t)[0] : null;
     log(`${label}: ${data.rows.length} rows, best: ${[...best].join(' / ') || '—'}, season over: ${data.done ? 'yes' : 'no'}${post ? `, ${post.stage.size} playoff teams${champ ? ', champion ' + champ : ''}` : ''}`);
