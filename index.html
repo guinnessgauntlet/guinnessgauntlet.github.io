@@ -113,9 +113,14 @@ input.n{width:4.6em;font-family:var(--f-mono);text-align:center}
 .quad input,.quad select{width:100%;text-align:center;font-family:var(--f-mono);padding:6px 2px}
 .rules dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px 16px;margin:0}
 .rules dt{font-weight:600}.rules dd{margin:0;color:var(--muted)}
+textarea{font:inherit;color:var(--cream);background:var(--panel2);border:1px solid var(--rule);border-radius:6px;padding:7px 9px;width:100%;min-height:90px}
+.evform{display:grid;gap:8px;margin-top:10px}
+.swapbtn{background:none;border:0;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
 .ev{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--rule)}
 .ev:last-child{border-bottom:0}
 .tname{font-weight:600;display:block}.pname{display:block;font-size:12px;color:var(--muted)}
+.seasonsw .chip{background:transparent;color:var(--ink);border-color:rgba(20,17,15,.35)}
+.seasonsw .chip[aria-pressed="true"]{background:var(--ink);color:var(--cream);border-color:var(--ink)}
 .tl{position:relative;min-width:640px;padding-top:26px}
 .tl-row{display:grid;grid-template-columns:64px 1fr;align-items:center;height:30px}
 .tl-head{height:18px;position:absolute;top:0;left:0;right:0}
@@ -132,6 +137,9 @@ input.n{width:4.6em;font-family:var(--f-mono);text-align:center}
 .tl-line.dotted{border-left:2px dotted var(--amber)}
 .tl-line.dotted span{color:var(--amber);font-weight:600}
 .tl-line.today{border-left:2px solid var(--cream)}
+.tl-line.end{border-left:2px solid var(--amber)}
+.tl-row.other{opacity:.35}
+.tl-line.end span{color:var(--amber);font-weight:700;left:auto;right:3px}
 .tl-line.today span{color:var(--cream);font-weight:700}
 .tl{padding-bottom:40px}
 .needs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
@@ -176,6 +184,7 @@ input.n{width:4.6em;font-family:var(--f-mono);text-align:center}
 <header class="head"><div class="in">
   <h1>Guinness Gauntlet</h1>
   <div class="sub"><span id="seasonLabel">League year 2026–27</span><span>Every sport scaled to MLB’s 162 games</span></div>
+  <div class="chips seasonsw" id="seasonSwitch" hidden></div>
   <div class="sync" id="syncLine">Connecting…</div>
 </div></header>
 <nav><div class="in" role="tablist">
@@ -208,7 +217,7 @@ async function connect(){
       done(hex===String(window.GG_COMMISSIONER_HASH||'').trim().toLowerCase())}).catch(()=>done(false))})});
   AUTH={signIn:()=>A.signInWithPopup(auth,new A.GoogleAuthProvider()),signOut:()=>A.signOut(auth)};
   const wrapSnapDoc=s=>({id:s.id,exists:s.exists(),data:()=>s.data(),metadata:s.metadata});
-  const wrapD=r=>({id:r.id,get:async()=>wrapSnapDoc(await F.getDoc(r)),set:d=>F.setDoc(r,d),delete:()=>F.deleteDoc(r),
+  const wrapD=r=>({id:r.id,get:async()=>wrapSnapDoc(await F.getDoc(r)),set:(d,o)=>o?F.setDoc(r,d,o):F.setDoc(r,d),delete:()=>F.deleteDoc(r),
     onSnapshot:(n,e)=>F.onSnapshot(r,s=>n(wrapSnapDoc(s)),e)});
   const wrapQ=q=>({onSnapshot:(n,e)=>F.onSnapshot(q,s=>n({docs:s.docs.map(wrapSnapDoc),metadata:s.metadata}),e)});
   return {
@@ -254,6 +263,15 @@ const EVENTS=[
  {id:'woly30',name:'Winter Olympics 2030',short:'Winter Oly',when:'Feb 2030 · French Alps',ladder:MEDAL}
 ];
 const GENERIC=['Out early','Reached the knockouts','Lost quarterfinal','Lost semifinal','Lost final','Won it'];
+/* Event templates: reuse any format in any season. Type the year in the name and paste the player/team list. */
+const EV_TPL={
+ perwin:{label:'Match wins, like the Mosconi Cup',perWin:{win:4,team:10,mvp:10},pickLabel:'Type a player',ladder:['','','','','',''],needsPool:1},
+ ko:{label:'Knockout tournament (World Cup, Rugby, Euros)',ladder:KO},
+ cricket:{label:'Cricket World Cup',ladder:['Out in group stage','Out in Super Six',null,'Lost semifinal','Lost final','Champions']},
+ march:{label:'March Madness',ladder:['Lost in first round or First Four','Lost Round of 32','Lost Sweet 16','Lost Elite Eight','Lost in Final Four or title game','National champion'],pickLabel:'Type a school'},
+ medal:{label:'Olympics (medal table)',ladder:MEDAL},
+ generic:{label:'Other',ladder:GENERIC}};
+const evYearOK=(e,k)=>{if(k===1)return true;const yy=+(e.id.match(/(\d\d)$/)||[])[1];if(!yy||e.perWin)return false;const y=2000+yy,Y=seasonYear(k);return y>=Y&&y<=Y+1};
 const COUNTRIES=T('Argentina|Australia|Austria|Belgium|Brazil|Canada|China|Colombia|Croatia|Denmark|England|Fiji|France|Georgia|Germany|Great Britain|India|Ireland|Italy|Jamaica|Japan|Kenya|Mexico|Morocco|Netherlands|New Zealand|Nigeria|Norway|Pakistan|Portugal|Samoa|Scotland|Senegal|South Africa|South Korea|Spain|Sri Lanka|Sweden|Switzerland|Tonga|United States|Uruguay|Wales|West Indies');
 const GOLFERS=T('Scottie Scheffler|Rory McIlroy|Xander Schauffele|Bryson DeChambeau|Jon Rahm|Ludvig Åberg|Collin Morikawa|Tommy Fleetwood|Justin Thomas|Viktor Hovland|Patrick Cantlay|Hideki Matsuyama|Jordan Spieth|Brooks Koepka|Shane Lowry|Tyrrell Hatton|Russell Henley|Sepp Straka|Keegan Bradley|J.J. Spaun|Robert MacIntyre|Cameron Young|Ben Griffin|Harris English|Justin Rose|Matt Fitzpatrick|Sam Burns|Wyndham Clark|Joaquín Niemann|Tony Finau|Corey Conners|Akshay Bhatia|Min Woo Lee|Jason Day|Adam Scott|Cameron Smith|Patrick Reed|Tom Kim|Aaron Rai|Chris Gotterup|Nicolai Højgaard|Jake Knapp|Maverick McNealy|Si Woo Kim|Daniel Berger|Max Homa');
 const TENNIS=T('Jannik Sinner|Carlos Alcaraz|Novak Djokovic|Alexander Zverev|Taylor Fritz|Jack Draper|Ben Shelton|Lorenzo Musetti|Alex de Minaur|Holger Rune|Daniil Medvedev|Casper Ruud|Tommy Paul|Frances Tiafoe|Andrey Rublev|João Fonseca|Jakub Menšík|Félix Auger-Aliassime');
@@ -267,24 +285,55 @@ function golfPts(pos){const s=String(pos??'').trim().toUpperCase();if(!s||/MC|CU
   return n===1?30:n===2?20:n===3?16:n===4?14:n===5?12:n<=10?16-n:n<=20?5:n<=40?3:1}
 
 /* ================= State ================= */
-let ready=false,canWrite=false,tab='standings',scoreSport='nfl',pickSport=null,pending=null,openRow=null,confirmKey=null;
-const S={history:{},members:[],picks:[],results:{},meta:{},cfg:structuredClone(DEF_CFG),draft:{status:'setup',order:[]},sync:null};
+let ready=false,canWrite=false,tab='standings',scoreSport='nfl',pickSport=null,pending=null,openRow=null,confirmKey=null,swapN=null,swapSport=null;
+const S={allPicks:[],cfgs:{},drafts:{},resultsAll:{},metaAll:{},historyAll:{},history:{},members:[],picks:[],results:{},meta:{},cfg:structuredClone(DEF_CFG),draft:{status:'setup',order:[]},sync:null};
 const dirty={},timers={},inflight={},again={};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const f1=n=>(Math.round(n*10)/10).toFixed(1);
 const slug=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/ø/g,'o').replace(/&/g,'and').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
 const rid=(sport,team)=>sport+'__'+slug(team);
+/* ---------- Seasons ----------
+   Season 1 keeps the original document names; season N (2+) prefixes its own copies with "sN~".
+   The site always shows one season at a time (viewSeason); S.cfg / S.draft / S.picks / S.results / S.meta / S.history
+   are that season's views, rebuilt by applySeason(). */
+let viewSeason=1,viewSeasonChosen=false;
+const curSeason=()=>Math.max(1,Number(S.cfgs[1]?.current)||1);
+const P=k=>k===1?'':`s${k}~`;
+const cfgPath=k=>k===1?'config/main':`config/s${k}`;
+const draftPath=k=>k===1?'draft/main':`draft/s${k}`;
+const seasonYear=k=>2025+k;               // season 2 = MLB 2027, season 3 = MLB 2028 …
+const seasonLabel=k=>k===1?'2026–27':`${seasonYear(k)}–${String(seasonYear(k)+1).slice(2)}`;
+const seasonEnd=k=>k===1?'2027-06-20':`${seasonYear(k)+1}-06-20`;
+const todayISO=()=>new Date().toISOString().slice(0,10);
+const seasonIds=()=>Array.from({length:curSeason()},(_,i)=>i+1);
+const liveSeasons=()=>seasonIds().filter(k=>todayISO()<=seasonEnd(k));
+function stripView(all,k,globals=[]){const out={},pre=P(k);for(const id in all){if(globals.includes(id)){out[id]=all[id];continue}
+  if(k===1){if(!/^s\d+~/.test(id))out[id]=all[id]}else if(id.startsWith(pre))out[id.slice(pre.length)]=all[id]}return out}
+function cfgFor(k){const d=structuredClone(S.cfgs[k]||{});const base=structuredClone(DEF_CFG);
+  if(k>1){base.season=seasonLabel(k);base.sportsOn=Object.fromEntries(SPORTS.map(x=>[x.id,true]))}
+  return {...base,...d,bonus:{...DEF_BONUS,...(d.bonus||{})},sportsOn:d.sportsOn||base.sportsOn}}
+function applySeason(){const k=viewSeason;
+  if(!dirty['cfg:'+k])S.cfg=cfgFor(k);
+  S.draft=S.drafts[k]||{status:'setup',order:[]};
+  S.picks=S.allPicks.filter(p=>(p.season||1)===k);
+  const res=stripView(S.resultsAll,k);for(const key in S.results)if(dirty['r:'+k+':'+key])res[key]=S.results[key];S.results=res;
+  S.meta=stripView(S.metaAll,k,['logos','scoreboard']);
+  S.history=stripView(S.historyAll,k);
+}
+function teamOf(m,k=viewSeason){if(!m)return '';const tb=m.teamBy||{};if(tb[k])return tb[k];
+  for(let j=k-1;j>=1;j--)if(tb[j])return tb[j];return m.team||''}
 const mname=id=>S.members.find(m=>m.id===id)?.name||'Someone';
 // Team name with the person's name beneath it (or just the person if no team name yet)
 const whoHtml=(id,small=true)=>{const m=S.members.find(x=>x.id===id);if(!m)return 'Someone';
-  return m.team?`<span class="tname">${esc(m.team)}</span>${small?`<span class="pname">${esc(m.name)}</span>`:''}`:esc(m.name)};
+  const t=teamOf(m);return t?`<span class="tname">${esc(t)}</span>${small?`<span class="pname">${esc(m.name)}</span>`:''}`:esc(m.name)};
 function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,2800)}
 const B=k=>{const v=Number(S.cfg.bonus?.[k]);const n=Number.isFinite(v)?v:DEF_BONUS[k];return k==='spoon'?Math.abs(n):n};
 const isDone=id=>S.cfg.done?.[id]??!!S.meta[id]?.done;
 
 /* ================= Definitions ================= */
-const eventList=()=>[...EVENTS,...(S.cfg.customEvents||[]).map(c=>({...c,short:c.name.slice(0,10),when:'Custom event',ladder:GENERIC}))];
+const eventList=()=>[...EVENTS.filter(e=>evYearOK(e,viewSeason)),...(S.cfg.customEvents||[]).map(c=>{const t=EV_TPL[c.tpl]||EV_TPL.generic;
+  return {...c,short:c.short||c.name.replace(/\s*'?\d{2,4}$/,'').slice(0,12),when:c.when||'Custom event',ladder:t.ladder,...(t.perWin?{perWin:t.perWin}:{}),...(t.pickLabel?{pickLabel:t.pickLabel}:{}),pool:c.pool?.length?c.pool:undefined,custom:true}})];
 const activeEvents=()=>eventList().filter(e=>S.cfg.events?.[e.id]?.active);
 const defOf=id=>id==='flex'?FLEX:SPORTS.find(s=>s.id===id)||{...eventList().find(e=>e.id===id),kind:'event'};
 const evWeight=id=>{const w=Number(S.cfg.events?.[id]?.weight);return w>0?w:1};
@@ -357,7 +406,7 @@ const SPECIAL_FLAGS={ENG:'🏴\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E0
 function flagOf(name){const k=Object.keys(NAT).find(n=>slug(n)===slug(name));const c=k&&NAT[k];if(!c)return '';
   return SPECIAL_FLAGS[c]||String.fromCodePoint(...[...c].map(ch=>127397+ch.charCodeAt(0)))}
 const PEOPLE_SPORTS=['golf','tennis','mc26'];
-const logoImg=(sport,team,cls='')=>{if(PEOPLE_SPORTS.includes(sport)){const f=flagOf(team);return f?`<span class="flag ${cls}" aria-hidden="true">${f}</span>`:''}const u=logoOf(sport,team);return u?`<img class="logo ${cls}" src="${esc(u)}" alt="" loading="lazy" onerror="this.remove()">`:''};
+const logoImg=(sport,team,cls='')=>{if(PEOPLE_SPORTS.includes(sport)||String(sport).startsWith('x-')){const f=flagOf(team);return f?`<span class="flag ${cls}" aria-hidden="true">${f}</span>`:''}const u=logoOf(sport,team);return u?`<img class="logo ${cls}" src="${esc(u)}" alt="" loading="lazy" onerror="this.remove()">`:''};
 /* Draft projections: blend this season's pace with last season (early-season records are noisy). */
 function prevPct(sport,team){const m=S.meta.prev?.[sport];if(!m)return null;if(m[team]!=null)return m[team];
   const p=slug(team),k=Object.keys(m).find(k=>slug(k)===p||slug(k).endsWith('-'+p)||p.endsWith('-'+slug(k)));return k?m[k]:null}
@@ -390,53 +439,84 @@ function need(mid){const sl=D().slots||{},b=D().base||0,out={},mine=S.picks.filt
   for(const id in sl)out[id]=sl[id]-(id==='flex'?mine.filter(p=>p.flex).length:mine.filter(p=>p.sport===id&&!p.flex).length);return out}
 function takenMap(sport){const m={};S.picks.filter(p=>p.sport===sport).forEach(p=>m[slug(p.team)]=p.member);return m}
 function mainSlots(){const sl={};activeSports().forEach(s=>sl[s.id]=s.count||1);sl.flex=1;activeEvents().forEach(e=>{if(!S.picks.some(p=>p.sport===e.id))sl[e.id]=1});return sl}
-const nextN=()=>S.picks.reduce((a,p)=>Math.max(a,p.n+1),0);
+const repicksOf=m=>Math.max(0,Number(m?.repicks?.[viewSeason])||0);
+const myMember=()=>S.members.find(m=>m.uid&&m.uid===me);
+function canSwap(p){if(D().status==='live')return false;if(isCommish)return true;const m=myMember();return !!m&&p.member===m.id&&repicksOf(m)>0}
+const nextN=()=>S.allPicks.reduce((a,p)=>Math.max(a,p.n+1),0);
 const pid=n=>'p'+String(n).padStart(4,'0');
 
 /* ================= Views ================= */
 function render(){
   document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===tab)));
-  $('#seasonLabel').textContent='League year '+(S.cfg.season||'2026–27');
+  const sw=$('#seasonSwitch');
+  if(ready&&curSeason()>1){sw.hidden=false;sw.innerHTML=seasonIds().map(k=>`<button class="chip" data-season="${k}" aria-pressed="${k===viewSeason}">Season ${k} · ${esc(cfgFor(k).season||seasonLabel(k))}</button>`).join('')}else sw.hidden=true;
+  $('#seasonLabel').textContent=(curSeason()>1?`Season ${viewSeason} · `:'')+'League year '+(S.cfg.season||seasonLabel(viewSeason));
   const sl=$('#syncLine');
   if(S.sync?.at){const t=new Date(S.sync.at);sl.textContent='Scores updated '+(isNaN(t)?S.sync.at:t.toLocaleString([], {weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))+(S.sync.note?' · '+S.sync.note:'')}
   else if(ready)sl.textContent='Waiting for the first automatic score update';
   if(!ready)return;
-  $('#view').innerHTML=({standings:viewStandings,games:viewGames,draft:viewDraft,scores:viewScores,league:viewLeague}[tab])();
+  const others=liveSeasons().filter(k=>k!==viewSeason);
+  const banner=others.length?`<div class="notice" style="color:var(--cream)">${others.map(k=>k<viewSeason?`Season ${k} is still finishing (it ends around ${fmtDay(seasonEnd(k))}). <button class="btn ghost small" data-season="${k}">View season ${k}</button>`:`Season ${k} has started. <button class="btn ghost small" data-season="${k}">View season ${k}</button>`).join(' ')}</div>`:'';
+  $('#view').innerHTML=(tab==='games'?'':banner)+({standings:viewStandings,games:viewGames,draft:viewDraft,scores:viewScores,league:viewLeague}[tab])();
   tick();
 }
+const slamCols=def=>def.kind==='tennis'&&viewSeason===1?[0]:[0,1,2,3];
 /* Season timeline: one bar per sport (regular season lighter, playoffs solid), key dates, today, next draft. */
 const TIMELINE={from:'2026-08-15',to:'2027-06-30',
-  bars:{nfl:[['2026-09-10','2027-01-10','Regular season'],['2027-01-16','2027-02-14','Playoffs → Super Bowl LXI, Feb 14',1]],
-        nba:[['2026-10-20','2027-04-11','Regular season'],['2027-04-13','2027-06-20','Play-in, playoffs and Finals (Finals mid-June)',1]],
-        nhl:[['2026-09-29','2027-04-15','Regular season (84 games)'],['2027-04-17','2027-06-20','Stanley Cup playoffs (Final mid-June)',1]],
-        epl:[['2026-08-21','2027-05-30','Season · final day May 30, all games at once']],
-        tennis:[['2027-01-18','2027-01-31','Australian Open, Jan 18–31',1]],
-        mc26:[['2026-11-27','2026-11-30','Mosconi Cup, Nov 27–30 · Orlando',1]]},
-  marks:[{d:'2027-02-14',l:'Super Bowl'},{d:'2027-05-30',l:'EPL final day'},{d:'2027-03-28',l:'Season 2 draft',dotted:1},{d:'2027-04-01',l:'MLB opening day'}]};
+  bars:{nfl:[['2026-09-10','2027-01-10','regular season'],['2027-01-16','2027-02-14','playoffs, ending with Super Bowl LXI',1]],
+        nba:[['2026-10-20','2027-04-11','regular season'],['2027-04-13','2027-06-20','play-in, playoffs and Finals',1,1]],
+        nhl:[['2026-09-29','2027-04-15','regular season',0,1],['2027-04-17','2027-06-20','Stanley Cup playoffs and Final',1,1]],
+        epl:[['2026-08-21','2027-05-30','season (no playoffs)']],
+        tennis:[['2027-01-18','2027-01-31','Australian Open',1]],
+        mc26:[['2026-11-27','2026-11-30','Mosconi Cup in Orlando',1]]},
+  marks:[{d:'2027-02-14',l:'Super Bowl'},{d:'2027-05-30',l:'EPL final day'},{d:'2027-03-28',l:'Season 2 draft',dotted:1},{d:'2027-04-01',l:'MLB opening day'},{d:'2027-06-20',l:'Season 1 ends',end:1}]};
+const fmtDay=d=>new Date(d+'T12:00:00').toLocaleDateString([], {month:'short',day:'numeric',year:'numeric'});
+function timelineFor(k){
+  if(k===1)return TIMELINE;
+  const Y=seasonYear(k),Z=Y+1,known=Y===2027,E=known?0:1; // 2027 golf/tennis/MLB dates are published; later years are estimates
+  return {from:`${Y}-03-01`,to:`${Z}-06-30`,
+    bars:{mlb:[[known?'2027-04-01':`${Y}-03-27`,`${Y}-09-27`,'regular season',0,E],[`${Y}-09-29`,`${Y}-11-01`,'postseason',1,1]],
+      f1:[[`${Y}-03-07`,`${Y}-12-05`,'season',0,1]],
+      golf:[[`${Y}-04-08`,`${Y}-04-11`,'Masters',1,E],[`${Y}-05-20`,`${Y}-05-23`,'PGA Championship',1,E],[`${Y}-06-17`,`${Y}-06-20`,'U.S. Open',1,E],[`${Y}-07-15`,`${Y}-07-18`,'The Open',1,E]],
+      tennis:[[known?'2027-05-17':`${Y}-05-24`,`${Y}-06-06`,'French Open',1,E],[`${Y}-06-28`,`${Y}-07-11`,'Wimbledon',1,E],[`${Y}-08-30`,`${Y}-09-12`,'US Open',1,E],[`${Z}-01-18`,`${Z}-01-31`,'Australian Open',1,1]],
+      avpm:[[`${Y}-05-01`,`${Y}-09-15`,'tour season',0,1]],avpw:[[`${Y}-05-01`,`${Y}-09-15`,'tour season',0,1]],
+      nfl:[[`${Y}-09-09`,`${Z}-01-09`,'regular season',0,1],[`${Z}-01-15`,`${Z}-02-13`,'playoffs, ending with the Super Bowl',1,1]],
+      nba:[[`${Y}-10-20`,`${Z}-04-11`,'regular season',0,1],[`${Z}-04-13`,`${Z}-06-20`,'play-in, playoffs and Finals',1,1]],
+      nhl:[[`${Y}-10-07`,`${Z}-04-15`,'regular season',0,1],[`${Z}-04-17`,`${Z}-06-20`,'Stanley Cup playoffs and Final',1,1]],
+      epl:[[`${Y}-08-21`,`${Z}-05-30`,'season (no playoffs)',0,1]]},
+    marks:[{d:known?'2027-04-01':`${Y}-03-27`,l:'MLB opening day'},{d:`${Z}-02-13`,l:'Super Bowl'},{d:`${Z}-03-28`,l:`Season ${k+1} draft`,dotted:1},{d:`${Z}-06-20`,l:`Season ${k} ends`,end:1}]};
+}
 const tlDay=d=>Date.parse(d+'T12:00:00');
 let tlNote='';
 function viewTimeline(){
-  const T0=tlDay(TIMELINE.from),T1=tlDay(TIMELINE.to),pct=d=>Math.max(0,Math.min(100,(tlDay(d)-T0)/(T1-T0)*100));
-  const rows=columns().filter(c=>TIMELINE.bars[c.id]);
+  const k=viewSeason,TL=timelineFor(k),T0=tlDay(TL.from),T1=tlDay(TL.to),inR=d=>tlDay(d)>=T0&&tlDay(d)<=T1,pct=d=>Math.max(0,Math.min(100,(tlDay(d)-T0)/(T1-T0)*100));
+  const rows=columns().filter(c=>TL.bars[c.id]).map(c=>({c,bars:TL.bars[c.id]}));
+  // Faded bars for the neighbouring season that overlaps this one
+  for(const j of [k-1,k+1]){if(j<1||j>curSeason())continue;const O=timelineFor(j),on=cfgFor(j).sportsOn||{};
+    for(const id of Object.keys(O.bars)){if(!on[id])continue;const bars=O.bars[id].filter(([a,b])=>tlDay(b)>=T0&&tlDay(a)<=T1);
+      if(bars.length)rows.push({c:{...defOf(id),short:`S${j} ${defOf(id).short}`,name:`Season ${j} ${defOf(id).name}`},bars,other:1})}}
   if(!rows.length)return '';
-  const months=[];for(let y=2026,m=8;y<2027||m<=6;m++){if(m>12){m=1;y++}months.push({l:new Date(y,m-1,1).toLocaleString([], {month:'short'}),p:pct(`${y}-${String(m).padStart(2,'0')}-01`)});if(y===2027&&m===6)break}
+  const months=[];{const d=new Date(TL.from+'T12:00:00');d.setDate(1);while(tlDay(d.toISOString().slice(0,10))<=T1){const iso=d.toISOString().slice(0,10);if(inR(iso))months.push({l:d.toLocaleString([], {month:'short'}),p:pct(iso)});d.setMonth(d.getMonth()+1)}}
   const today=new Date().toISOString().slice(0,10),tp=pct(today);
-  const lines=[...TIMELINE.marks.map(m=>({...m,p:pct(m.d)})),{d:today,l:'Today',p:tp,today:1}].sort((a,b)=>a.p-b.p).map((x,i)=>({...x,row:i%2}));
+  const lines=[...TL.marks.filter(m=>inR(m.d)).map(m=>({...m,p:pct(m.d)})),...(inR(today)?[{d:today,l:'Today',p:tp,today:1}]:[])].sort((a,b)=>a.p-b.p).map((x,i)=>({...x,row:i%2}));
   return `<section class="panel"><div class="cardhead"><h3>Season timeline</h3><span class="small muted">Tap a bar for dates</span></div>
    <div class="scroll"><div class="tl">
     <div class="tl-row tl-head"><span></span><div class="tl-track">${months.map(m=>`<span class="tl-month" style="left:${m.p}%">${m.l}</span>`).join('')}</div></div>
-    ${rows.map(c=>`<div class="tl-row"><span class="tl-name">${esc(c.short)}</span><div class="tl-track">${TIMELINE.bars[c.id].map(([a,b,l,post])=>
-      `<button class="tl-bar${post?' post':''}" style="left:${pct(a)}%;width:${Math.max(.8,pct(b)-pct(a))}%" data-tl="${esc(c.name+': '+l)}" aria-label="${esc(c.name+': '+l)}"></button>`).join('')}</div></div>`).join('')}
-    <div class="tl-lines">${lines.map(x=>`<div class="tl-line${x.dotted?' dotted':''}${x.today?' today':''}${x.row?' r1':''}" style="left:${x.p}%"><span>${esc(x.l)}</span></div>`).join('')}</div>
+    ${rows.map(({c,bars,other})=>`<div class="tl-row${other?' other':''}"><span class="tl-name">${esc(c.short)}</span><div class="tl-track">${bars.map(([a,b,l,post,est])=>
+      (()=>{const txt=`${c.name} ${l}: ${fmtDay(a)}${a===b?'':' – '+fmtDay(b)}${est?' (dates estimated; schedule not final yet)':''}`;
+        return `<button class="tl-bar${post?' post':''}" style="left:${pct(a)}%;width:${Math.max(.8,pct(b)-pct(a))}%" data-tl="${esc(txt)}" title="${esc(txt)}" aria-label="${esc(txt)}"></button>`})()).join('')}</div></div>`).join('')}
+    <div class="tl-lines">${lines.map(x=>`<div class="tl-line${x.dotted?' dotted':''}${x.today?' today':''}${x.end?' end':''}${x.row?' r1':''}" style="left:${x.p}%"><span>${esc(x.l)}</span></div>`).join('')}</div>
    </div></div>
-   <p class="small muted" id="tlNote">${esc(tlNote)||'Lighter bars are regular seasons, solid bars are playoffs and events. The dotted line is the season 2 draft, before MLB opening day.'}</p></section>`;
+   <p class="small muted" id="tlNote">${esc(tlNote)||`Tap a bar to see its start and end dates. Lighter bars are regular seasons, solid bars are playoffs and events. The dotted line is the season ${k+1} draft; season ${k} ends when the last trophy is lifted in June.${rows.some(r=>r.other)?' Faded rows belong to the overlapping season.':''}`}</p></section>`;
 }
 /* Games: today's (or another day's) games in our leagues, with drafted teams highlighted.
    Reads ESPN's public scoreboards straight from the browser; falls back to the hourly copy the updater saves. */
 const GAME_PATHS={nfl:'football/nfl',nba:'basketball/nba',nhl:'hockey/nhl',mlb:'baseball/mlb',epl:'soccer/eng.1'};
 const ymdLocal=d=>d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
 let gamesDay=0,onlyOurs=true,G={},gamesTimer=null,gamesLoading=false;
-function ownersOf(sport,team){const p=slug(team);return S.members.filter(m=>S.picks.some(k=>k.member===m.id&&k.sport===sport&&(slug(k.team)===p||p.endsWith('-'+slug(k.team))||slug(k.team).endsWith('-'+p))))}
+function ownersOf(sport,team){const p=slug(team),ks=liveSeasons().length?liveSeasons():[viewSeason],tag=ks.length>1,out=[];
+  for(const k of ks)for(const m of S.members)if(S.allPicks.some(x=>(x.season||1)===k&&x.member===m.id&&x.sport===sport&&(slug(x.team)===p||p.endsWith('-'+slug(x.team))||slug(x.team).endsWith('-'+p))))out.push({...m,_season:k,_tag:tag?` · S${k}`:''});
+  return out}
 function parseEvents(json){return (json?.events||[]).map(ev=>{const c=ev.competitions?.[0]||{},st=c.status||ev.status||{};
   const side=k=>{const x=(c.competitors||[]).find(t=>t.homeAway===k)||{};return {name:x.team?.displayName||x.team?.name||'',logo:x.team?.logo||x.team?.logos?.[0]?.href||'',score:x.score??'',winner:!!x.winner}};
   return {id:ev.id,date:ev.date,state:st.type?.state||'pre',detail:st.type?.shortDetail||st.type?.detail||'',note:c.notes?.[0]?.headline||'',away:side('away'),home:side('home')}})}
@@ -451,7 +531,8 @@ function viewGames(){
   const day=new Date();day.setDate(day.getDate()+gamesDay);const key=ymdLocal(day);
   if(!Object.values(G).some(g=>g.key===key)){loadGames()}
   clearInterval(gamesTimer);gamesTimer=setInterval(()=>{if(tab==='games'&&!document.hidden)loadGames()},60000);
-  const sports=columns().filter(c=>GAME_PATHS[c.id]);
+  const ks=liveSeasons().length?liveSeasons():[viewSeason];
+  const sports=SPORTS.filter(c=>GAME_PATHS[c.id]&&ks.some(k=>cfgFor(k).sportsOn?.[c.id]||S.allPicks.some(p=>(p.season||1)===k&&p.sport===c.id)));
   const label=gamesDay===0?'Today':gamesDay===-1?'Yesterday':gamesDay===1?'Tomorrow':day.toLocaleDateString([], {weekday:'short',month:'short',day:'numeric'});
   const head=`<section class="panel"><div class="cardhead"><h2>${label}</h2><span class="small muted">${day.toLocaleDateString([], {weekday:'long',month:'long',day:'numeric'})}</span></div>
     <div class="row" style="justify-content:space-between;align-items:center"><div class="row"><button class="btn ghost small" data-gday="-1">← Prev day</button><button class="btn ghost small" data-gday="0"${gamesDay===0?' disabled':''}>Today</button><button class="btn ghost small" data-gday="1">Next day →</button></div>
@@ -460,7 +541,7 @@ function viewGames(){
     let evs=g.events.map(e=>({...e,ao:ownersOf(c.id,e.away.name),ho:ownersOf(c.id,e.home.name)}));const total=evs.length;
     if(onlyOurs)evs=evs.filter(e=>e.ao.length||e.ho.length);
     evs.sort((a,b)=>({in:0,pre:1,post:2}[a.state]-{in:0,pre:1,post:2}[b.state])||Date.parse(a.date)-Date.parse(b.date));
-    const owner=list=>list.length?`<span class="owners">${list.map(m=>`<span class="owner">${esc(m.team||m.name)}</span>`).join('')}</span>`:'';
+    const owner=list=>list.length?`<span class="owners">${list.map(m=>`<span class="owner">${esc(teamOf(m,m._season||viewSeason)||m.name)}${m._tag||''}</span>`).join('')}</span>`:'';
     const side=(t,o,pre)=>`<div class="gside${t.winner?' won':''}">${t.logo?`<img class="logo" src="${esc(t.logo)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`:'<span class="logo"></span>'}<span class="gname">${esc(t.name)}${owner(o)}</span><span class="gscore num">${pre?'':esc(t.score)}</span></div>`;
     const status=e=>e.state==='pre'?new Date(e.date).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):e.detail;
     return `<section class="panel"><div class="cardhead"><h3>${esc(c.name)}</h3><span class="small muted">${total?`${total} game${total===1?'':'s'}`:'No games'}${g.failed?' · couldn’t load':!g.live&&g.at?' · as of '+new Date(g.at).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):''}</span></div>
@@ -473,12 +554,21 @@ function viewGames(){
    The standings then show places and points gained since that snapshot. */
 function weekKey(){const d=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Chicago'}));const day=(d.getDay()+6)%7;d.setDate(d.getDate()-day);
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
-let snapTried='';
-function saveWeekSnapshot(rows,ranks){const k=weekKey();if(!db||!ready||S.history[k]||snapTried===k)return;snapTried=k;
+let snapTried='';const loaded={};
+function saveWeekSnapshot(rows,ranks){const k=weekKey();if(!db||!ready||!loaded.results||!loaded.history||S.history[k]||snapTried===P(viewSeason)+k)return;snapTried=P(viewSeason)+k;
   const doc={at:new Date().toISOString(),ranks,totals:Object.fromEntries(rows.map(r=>[r.m.id,Math.round(r.total*10)/10]))};
-  db.doc('history/'+k).set(doc).catch(()=>{})}
+  db.doc('history/'+P(viewSeason)+k).set(doc).catch(()=>{})}
 function weekBaseline(){const k=weekKey(),h=S.history[k];if(!h)return null;
   const d=new Date(k+'T12:00:00');return {...h,label:'Monday '+d.toLocaleDateString([], {month:'short',day:'numeric'})}}
+function standingsFor(k){if(k===viewSeason)return S.picks.length?standings():[];
+  const keep=viewSeason,saved={cfg:S.cfg,draft:S.draft,picks:S.picks,results:S.results,meta:S.meta,history:S.history};
+  viewSeason=k;S.cfg=cfgFor(k);S.draft=S.drafts[k]||{status:'setup',order:[]};S.picks=S.allPicks.filter(p=>(p.season||1)===k);
+  S.results=stripView(S.resultsAll,k);S.meta=stripView(S.metaAll,k,['logos','scoreboard']);S.history=stripView(S.historyAll,k);
+  try{return S.picks.length?standings():[]}finally{viewSeason=keep;Object.assign(S,saved)}}
+function hallOfChampions(){if(curSeason()<2)return '';
+  const rows=seasonIds().map(k=>{const st=standingsFor(k);if(!st.length)return '';const w=st[0],final=todayISO()>seasonEnd(k);
+    return `<div><span><strong>Season ${k}</strong> <span class="muted small">${esc(cfgFor(k).season||seasonLabel(k))}</span></span><span>${final?'🏆 ':''}${esc(teamOf(w.m,k)||w.m.name)} <span class="muted small">${esc(w.m.name)} · ${f1(w.total)} pts${final?` · owed ${S.members.length-1} pints`:' · leading'}</span></span></div>`}).join('');
+  return rows?`<section class="panel"><h3>Hall of Champions</h3><div class="list">${rows}</div></section>`:''}
 function viewStandings(){
   if(!S.members.length)return `<div class="notice">No one is in the Gauntlet yet. Add everyone on the League tab, then run the draft.</div>`;
   if(!S.picks.length)return `<section class="panel"><h2>Standings</h2><p class="muted">Standings appear once the draft starts. Signed up: ${S.members.map(m=>esc(m.name)).join(', ')}.</p><div><button class="btn" data-go="draft">Go to the draft</button></div></section>`;
@@ -493,12 +583,13 @@ function viewStandings(){
       +(isOpen?`<tr class="detail"><td colspan="${cols.length+4}">${breakdown(r,cols)}</td></tr>`:'')}).join('');
   const lead=rows[0],pints=S.members.length-1;
   const leaders=cols.map(c=>{const best=rows.map(r=>({r,v:r.by[c.id].pts})).sort((a,b)=>b.v-a.v)[0];return best&&best.v>0?`<div><span>${esc(c.short)}</span><span>${esc(best.r.m.name)} <span class="num muted">${f1(best.v)}</span></span></div>`:''}).join('');
-  return `<div class="clock"><span class="label" style="color:inherit;opacity:.7">The stakes</span><div class="who" style="font-size:30px">🍺 ${esc(lead.m.team||lead.m.name)} is owed ${pints} pint${pints===1?'':'s'}</div><div class="meta">Losers each buy the winner a Guinness when the season ends.</div></div>
+  return `<div class="clock"><span class="label" style="color:inherit;opacity:.7">The stakes</span><div class="who" style="font-size:30px">🍺 ${esc(teamOf(lead.m)||lead.m.name)} is owed ${pints} pint${pints===1?'':'s'}</div><div class="meta">Losers each buy the winner a Guinness when the season ends.</div></div>
   <section class="panel"><div class="cardhead"><h2>Standings</h2><span class="small muted">Tap a name for their teams</span></div>
    <div class="scroll"><table><tr><th class="l">#</th><th class="l">Name</th>${cols.map(c=>`<th title="${esc(c.name)}">${esc(c.short)}</th>`).join('')}<th>Total</th><th title="Places and points gained since the start of this week">This week</th></tr>${body}</table></div>
    <p class="small muted">Everyone starts at 0. Each win is worth 162 ÷ the league’s season length (an NFL win is 9.5, an MLB win is 1), so a perfect season is worth the same in every sport. Playoff, title and best-record bonuses add on; the wooden spoon takes 10 away.</p></section>
   ${leaders?`<section class="panel"><h3>Leading each sport</h3><div class="list">${leaders}</div></section>`:''}
-  ${viewTimeline()}`;
+  ${viewTimeline()}
+  ${hallOfChampions()}`;
 }
 function breakdown(r,cols){
   const rows=cols.flatMap(c=>{const s=r.by[c.id];
@@ -551,7 +642,7 @@ function viewDraft(){
        ${Object.keys(tk).length?`<p class="small muted">Taken: ${S.picks.filter(p=>p.sport===def.id).map(p=>esc(p.team)+' ('+esc(mname(p.member))+')').join(', ')}</p>`:''}`}
     const nextUp=[1,2].map(k=>i+k<total?esc(mname(onClock(i+k))):null).filter(Boolean);
     top=`<div class="clock"><div class="clockrow"><div><span class="label" style="color:inherit;opacity:.7">On the clock · Pick ${i+1} of ${total} · Round ${Math.floor(i/N)+1}</span>
-      <div class="who">${esc(mine?.name||'?')} ${mine?.uid&&mine.uid===me?'<span class="you">You</span>':''}</div>${mine?.team?`<div class="meta">${esc(mine.team)}</div>`:''}
+      <div class="who">${esc(mine?.name||'?')} ${mine?.uid&&mine.uid===me?'<span class="you">You</span>':''}</div>${teamOf(mine)?`<div class="meta">${esc(teamOf(mine))}</div>`:''}
       <div class="meta">${nextUp.length?'Then: '+nextUp.join(', '):'Last pick of the draft'}</div></div>
       ${d.pickSeconds?`<div class="timer" id="timer">${PINT}<div><div class="tleft" id="tLeft">${Number(d.pickSeconds).toFixed(1)}</div><div class="tsub" id="tSub">seconds</div></div></div>`:''}</div>
       ${isCommish?`<div class="tctl"><button class="btn ghost small" data-act="autoPick">Auto-pick for ${esc(mine?.name||'them')}</button><button class="btn ghost small" data-act="autoAll">${autoRunning?'Stop auto-draft':'Auto-draft the rest'}</button></div>`:''}
@@ -582,17 +673,19 @@ function viewDraft(){
   const allCols=columns().filter(c=>S.picks.some(p=>p.sport===c.id)||(d.slots||{})[c.id]);
   const cols=allCols.filter(c=>c.kind!=='event'),evCols=allCols.filter(c=>c.kind==='event');
   const people=d.order?.length&&!evCols.some(c=>(d.slots||{})[c.id])?d.order:S.members.map(m=>m.id);
-  const cell=(id,c)=>S.picks.filter(p=>p.member===id&&(c.id==='flex'?p.flex:p.sport===c.id&&!p.flex)).map(p=>logoImg(p.sport,p.team,'sm')+esc(p.team)+(c.id==='flex'?` <span class="muted small">${esc(defOf(p.sport).short)}</span>`:'')).join('<br>')||'<span class="muted">–</span>';
+  const cell=(id,c)=>S.picks.filter(p=>p.member===id&&(c.id==='flex'?p.flex:p.sport===c.id&&!p.flex)).map(p=>{const inner=logoImg(p.sport,p.team,'sm')+esc(p.team)+(c.id==='flex'?` <span class="muted small">${esc(defOf(p.sport).short)}</span>`:'')+(p.replaced?.length?' <span class="muted small" title="Replaced pick">↺</span>':'');
+    return canSwap(p)?`<button class="swapbtn" data-swap="${p.n}" title="Replace this pick">${inner}</button>`:inner}).join('<br>')||'<span class="muted">–</span>';
   const specials=evCols.length?`<section class="panel"><h3>Special drafts</h3>
     <div class="scroll"><table class="roster"><tr><th class="l">Name</th>${evCols.map(c=>`<th class="l">${esc(c.name)}<div class="small muted" style="text-transform:none;letter-spacing:0;font-weight:500">${esc(c.when||'')}</div></th>`).join('')}</tr>
     ${S.members.map(m=>m.id).map(id=>`<tr><td class="l">${whoHtml(id)}</td>${evCols.map(c=>`<td class="l">${cell(id,c)}</td>`).join('')}</tr>`).join('')}</table></div></section>`:'';
   const last=picks.at(-1);
-  const board=`<section class="panel"><div class="cardhead"><h3>Rosters</h3>${picks.length&&isCommish?`<button class="btn ghost small" data-act="undo">Undo last pick</button>`:''}</div>
+  const board=swapPanel()+`<section class="panel"><div class="cardhead"><h3>Rosters</h3>${picks.length&&isCommish?`<button class="btn ghost small" data-act="undo">Undo last pick</button>`:''}</div>
     ${confirmKey==='undo'&&last&&d.status!=='live'?`<div class="confirm"><span>Undo ${esc(last.team)} (${esc(mname(last.member))})?</span><button class="btn danger" data-yes="undo">Undo pick</button><button class="btn ghost" data-no>Keep it</button></div>`:''}
     <div class="scroll"><table class="roster${cols.length>8?' dense':''}"><tr><th class="l">Name</th>${cols.map(c=>`<th class="l">${esc(c.short)}</th>`).join('')}</tr>
     ${people.map(id=>`<tr><td class="l">${whoHtml(id)}</td>${cols.map(c=>`<td class="l">${cell(id,c)}</td>`).join('')}</tr>`).join('')}</table></div>
+    ${S.picks.length&&d.status!=='live'&&(isCommish||repicksOf(myMember())>0)?`<p class="small muted">${isCommish?'Tap any pick to replace it with an undrafted option.':'Tap one of your picks to use your re-pick.'}</p>`:''}
     ${picks.length?`<div class="label">Latest picks</div><div class="list">${picks.slice(-5).reverse().map(p=>`<div><span><span class="num muted">#${p.n-(d.base||0)+1}</span> ${esc(mname(p.member))}</span><span>${esc(p.team)} <span class="muted small">${esc(defOf(p.sport)?.short)}</span></span></div>`).join('')}</div>`:''}
-  </section>`;
+  </section>`+changeLog();
   const meClaimed=S.members.some(m=>m.uid&&m.uid===me);
   const myId=S.members.find(m=>m.uid&&m.uid===me)?.id;
   if(!needsFor||!S.members.some(m=>m.id===needsFor))needsFor=myId||'';
@@ -603,12 +696,14 @@ function viewDraft(){
         <span>${got.length?got.map(p=>logoImg(p.sport,p.team,'sm')+esc(p.team)+(slot==='flex'?` <span class="muted small">${esc(defOf(p.sport).short)}</span>`:'')).join('<br>'):'<span class="muted">Still needed</span>'}</span></div>`}).join('');
     const left=Object.keys(d.slots).reduce((a,k)=>a+Math.max(0,d.slots[k]-mine.filter(p=>k==='flex'?p.flex:p.sport===k&&!p.flex).length),0);
     return `<section class="panel"><div class="cardhead"><h3>${id&&id===myId?'Your picks':`${esc(mname(id))}’s picks`}</h3>
-      ${isCommish?`<label class="field"><span class="label">View</span><select id="needsFor" data-needsfor>${S.members.map(m=>`<option value="${m.id}"${m.id===id?' selected':''}>${esc(m.team||m.name)}</option>`).join('')}</select></label>`:`<span class="small muted">${left} pick${left===1?'':'s'} left</span>`}</div>
+      ${isCommish?`<label class="field"><span class="label">View</span><select id="needsFor" data-needsfor>${S.members.map(m=>`<option value="${m.id}"${m.id===id?' selected':''}>${esc(teamOf(m)||m.name)}</option>`).join('')}</select></label>`:`<span class="small muted">${left} pick${left===1?'':'s'} left</span>`}</div>
       ${id?`<div class="needs">${cells}</div>`:'<p class="small muted">Tap “This is me” on your name (League tab) to track your picks here.</p>'}</section>`})():'';
   const projBar=isCommish&&d.status==='live'?`<div>${projSwitch()}</div>`:'';
   const alertBar=d.status==='live'&&meClaimed?`<div class="row" style="justify-content:space-between;align-items:center"><span class="small muted">${alertsOn()?'🔔 Draft alerts are on for this device. Keep this page open.':'Get a chime and a notification when it’s your pick.'}</span><button class="btn ${alertsOn()?'ghost':''} small" data-act="alerts">${alertsOn()?'Test alert':'Turn on draft alerts'}</button></div>`
     :d.status==='live'&&!meClaimed?`<p class="small muted">Tap “This is me” on your name (League tab) to get alerts when it’s your pick.</p>`:'';
-  return alertBar+projBar+top+needsPanel+board+specials;
+  const mine=myMember(),rp=repicksOf(mine);
+  const repickBar=rp&&d.status!=='live'&&S.picks.some(p=>p.member===mine.id)?`<div class="notice" style="color:var(--cream)">The commissioner gave you ${rp} re-pick${rp===1?'':'s'}. Tap one of your picks in the Rosters table to swap it for any team or player nobody has drafted.</div>`:'';
+  return alertBar+projBar+repickBar+top+needsPanel+board+specials;
 }
 function viewScores(){
   const cols=columns(),ro=isCommish?'':' disabled';
@@ -628,8 +723,8 @@ function viewScores(){
   else if(def.kind==='golf'||def.kind==='tennis'){
     body=picks.map(p=>{const r=S.results[rid(def.id,p.team)]||{},vals=(def.kind==='golf'?r.pos:r.res)||['','','',''];
       return `<div class="card"><div class="cardhead"><strong>${esc(p.team)}</strong><span class="muted small">${esc(mname(p.member))}</span></div>
-       <div class="quad">${def.events.map(m=>`<span class="label" style="text-align:center">${m}</span>`).join('')}
-       ${def.events.map((m,i)=>def.kind==='golf'
+       <div class="quad">${slamCols(def).map(i=>`<span class="label" style="text-align:center">${def.kind==='tennis'&&viewSeason>1&&i===0?'Aus Open (Jan)':def.events[i]}</span>`).join('')}
+       ${slamCols(def).map(i=>[def.events[i],i]).map(([m,i])=>def.kind==='golf'
          ?`<input id="g-${slug(p.team)}-${i}" data-golf="${esc(p.team)}" data-i="${i}" value="${esc(vals[i])}" placeholder="–" aria-label="${m} finish for ${esc(p.team)}"${ro}>`
          :`<select id="t-${slug(p.team)}-${i}" data-tennis="${esc(p.team)}" data-i="${i}" aria-label="${m} result for ${esc(p.team)}"${ro}>${SLAM_RES.map(([v,l])=>`<option value="${v}"${(vals[i]||'')===v?' selected':''}>${l}</option>`).join('')}</select>`).join('')}</div></div>`}).join('')
       +`<p class="small muted">${def.kind==='golf'?'Enter a finishing place (1, T5, 34). MC, WD or blank scores 0. Points: win 30, 2nd 20, 3rd 16, 4th 14, 5th 12, 6th–10th 10 down to 6, 11th–20th 5, 21st–40th 3, any other made cut 1.':'Pick how far each player got. Each match won is worth '+f1(TENNIS_WIN)+' points; skipping or withdrawing earns nothing. Blank means that Slam hasn’t happened.'}</p>`}
@@ -646,27 +741,66 @@ function viewScores(){
    <p class="small muted">${def.kind==='avp'?'Choose which tournaments count this season, then enter each pair’s finish.':def.kind==='event'?'The commissioner sets each country’s result as the event plays out.':'Updates automatically every hour'+(def.kind==='team'?', including playoff rounds':def.kind==='golf'?' once each major finishes':def.kind==='tennis'?' as each Slam plays out':'')+'.'}${isCommish?' As commissioner you can correct anything here; a corrected result stays put until you change it again.':''}</p>
    ${doneCtl}${body}</section>`;
 }
+function swapOptions(def){const tk=takenMap(def.id);
+  if(def.teams)return teamList(def).filter(t=>!tk[slug(t)]).sort((a,b)=>showProj()?(projPts(def,b)??0)-(projPts(def,a)??0):0);
+  return poolOf(def).filter(x=>!tk[slug(x)])}
+function swapPanel(){if(swapN==null)return '';const p=S.picks.find(x=>x.n===swapN);if(!p||!canSwap(p)){swapN=null;return ''}
+  const sp=p.flex?(swapSport||p.sport):p.sport,def=defOf(sp),opts=swapOptions(def);
+  return `<section class="panel" id="swapPanel"><div class="cardhead"><h3>Replace ${esc(p.team)}</h3><button class="btn ghost small" data-act="cancelSwap">Cancel</button></div>
+    <p class="small muted">${esc(teamOf(S.members.find(m=>m.id===p.member))||mname(p.member))} · ${p.flex?'Flex · ':''}${esc(defOf(p.sport).short)}. Only undrafted options are shown.${isCommish?'':' This uses one of your re-picks.'}</p>
+    ${p.flex?`<div class="chips">${flexSports().map(x=>`<button class="chip" data-swapsport="${x.id}" aria-pressed="${x.id===sp}">${esc(x.short)}</button>`).join('')}</div>`:''}
+    ${swapTo?`<div class="confirm"><span>Swap <strong>${esc(p.team)}</strong> for <strong>${esc(swapTo)}</strong>${sp!==p.sport?` (${esc(def.short)})`:''}?</span><button class="btn" data-act="doSwap">Make the swap</button><button class="btn ghost" data-swapto="">Back</button></div>`:''}
+    <div class="grid">${opts.map(t=>{const r=S.results[rid(def.id,t)],pp=projPts(def,t);return `<button class="team" data-swapto="${esc(t)}">${logoImg(def.id,t)}<span>${esc(t)}<small>${[r?record(def,r):'',pp!=null&&showProj()?`Proj ${Math.round(pp)}`:''].filter(Boolean).join(' · ')}</small></span></button>`}).join('')}</div>
+    ${def.teams?'':`<form class="add" id="swapFree"><input id="swapInput" placeholder="${pickPrompt(def)}" maxlength="60" autocomplete="off"><button class="btn ghost">Use this name</button></form>`}</section>`}
+function changeLog(){const rows=S.picks.flatMap(p=>(p.replaced||[]).map(r=>({...r,p}))).sort((a,b)=>String(b.at).localeCompare(String(a.at)));
+  if(!rows.length)return '';
+  return `<section class="panel"><h3>Changes</h3><div class="list">${rows.map(r=>`<div><span>${esc(teamOf(S.members.find(m=>m.id===r.p.member))||mname(r.p.member))} <span class="muted small">${new Date(r.at).toLocaleDateString([], {month:'short',day:'numeric'})} · ${r.by==='self'?'used a re-pick':'by the commissioner'}</span></span><span>${esc(r.team)} <span class="muted small">${esc(defOf(r.sport).short)}</span> → ${esc(r.to)} <span class="muted small">${esc(defOf(r.toSport||r.sport).short)}</span></span></div>`).join('')}</div></section>`}
+async function doSwap(){const p=S.picks.find(x=>x.n===swapN),to=swapTo;if(!p||!to)return;
+  if(!canSwap(p)){swapN=null;swapTo=null;render();return toast('You don’t have a re-pick for that.')}
+  const sp=p.flex?(swapSport||p.sport):p.sport;
+  if(takenMap(sp)[slug(to)]){swapTo=null;render();return toast(to+' has been drafted.')}
+  const self=!isCommish,m=S.members.find(x=>x.id===p.member);
+  const doc={...p,sport:sp,team:to,replaced:[...(p.replaced||[]),{team:p.team,sport:p.sport,to,toSport:sp,at:new Date().toISOString(),by:self?'self':'commish'}]};
+  const old={...p};Object.assign(p,doc);swapN=null;swapTo=null;swapSport=null;render();
+  try{await db.doc('picks/'+pid(p.n)).set(doc);
+    if(self&&m){m.repicks={...(m.repicks||{}),[viewSeason]:repicksOf(m)-1};const {id,...rest}=m;await db.doc('members/'+id).set(rest)}
+    toast(`${old.team} replaced with ${to}.`)}catch(err){Object.keys(p).forEach(k=>delete p[k]);Object.assign(p,old);render();fail(err)}}
+function seasonsPanel(){const N=curSeason();
+  const list=seasonIds().map(k=>`<div><span><strong>Season ${k}</strong> <span class="muted small">${esc(cfgFor(k).season||seasonLabel(k))} · ${todayISO()>seasonEnd(k)?'final':k===N&&!S.allPicks.some(p=>(p.season||1)===k)?'draft not run yet':'in progress, ends around '+fmtDay(seasonEnd(k))}</span></span>${k===viewSeason?'<span class="you">Viewing</span>':`<button class="btn ghost small" data-season="${k}">View</button>`}</div>`).join('');
+  return `<section class="panel"><h2>Seasons</h2><div class="list">${list}</div>
+   <p class="small muted">Each season has its own draft, teams, settings and standings. Season ${N+1} starts with MLB opening day ${seasonYear(N+1)}; season ${N} keeps scoring until its last trophy in June.</p>
+   ${isCommish?`<div><button class="btn ghost" data-act="newSeason">Start season ${N+1}</button></div>
+   ${confirmKey==='newSeason'?`<div class="confirm"><span>Create season ${N+1} (${seasonLabel(N+1)})? Season ${N} stays as it is and keeps scoring. Everyone, team names and re-picks carry over per season.</span><button class="btn" data-yes="newSeason">Create it</button><button class="btn ghost" data-no>Not yet</button></div>`:''}`:''}</section>`}
 function viewLeague(){
   const ro=isCommish?'':' disabled',lock=S.picks.length>0;
   const members=`<section class="panel"><h2>The field</h2>
-   ${S.members.length?`<div class="list">${S.members.map(m=>`<div><span>${esc(m.name)} ${m.uid&&m.uid===me?'<span class="you">You</span>':''}${(isCommish||(m.uid&&m.uid===me))?`<br><input id="tn-${m.id}" data-teamname="${m.id}" value="${esc(m.team||'')}" placeholder="Team name" maxlength="40" aria-label="Team name for ${esc(m.name)}" style="margin-top:6px;width:min(260px,70vw)">`:m.team?`<br><span class="small muted">${esc(m.team)}</span>`:''}</span><span class="row">
+   ${S.members.length?`<div class="list">${S.members.map(m=>`<div><span>${esc(m.name)} ${m.uid&&m.uid===me?'<span class="you">You</span>':''}${(isCommish||(m.uid&&m.uid===me))?`<br><input id="tn-${m.id}" data-teamname="${m.id}" value="${esc(teamOf(m)||'')}" placeholder="Team name for season ${viewSeason}" maxlength="40" aria-label="Team name for ${esc(m.name)}" style="margin-top:6px;width:min(260px,70vw)">`:teamOf(m)?`<br><span class="small muted">${esc(teamOf(m))}</span>`:''}</span><span class="row">
      ${!m.uid&&!S.members.some(x=>x.uid===me)?`<button class="btn ghost small" data-claim="${m.id}"${canWrite?'':' disabled'}>This is me</button>`:''}
      ${m.uid===me?`<button class="btn ghost small" data-unclaim="${m.id}"${canWrite?'':' disabled'}>Not me</button>`:''}
-     ${!lock&&isCommish?`<button class="btn ghost small" data-del="${m.id}">Remove</button>`:''}</span></div>`).join('')}</div>`:'<p class="muted">No one yet. Add the first person below.</p>'}
+     ${isCommish&&!S.allPicks.some(p=>p.member===m.id)?`<button class="btn ghost small" data-del="${m.id}">Remove</button>`:''}</span></div>
+     ${isCommish&&lock?`<div class="row small" style="align-items:center;gap:6px;padding-top:0;border:0"><span class="muted">Re-picks for season ${viewSeason}: <strong>${repicksOf(m)}</strong></span><button class="btn ghost small" data-repick="${m.id}:-1"${repicksOf(m)?'':' disabled'} aria-label="One fewer re-pick">−</button><button class="btn ghost small" data-repick="${m.id}:1" aria-label="Give a re-pick">+</button></div>`:''}`).join('')}</div>`:'<p class="muted">No one yet. Add the first person below.</p>'}
    ${confirmKey?.startsWith('del:')?`<div class="confirm"><span>Remove ${esc(mname(confirmKey.slice(4)))}?</span><button class="btn danger" data-yes="${confirmKey}">Remove</button><button class="btn ghost" data-no>Keep</button></div>`:''}
    ${lock?'<p class="small muted">The draft has started, so the field is locked.</p>':!isCommish?'<p class="small muted">The commissioner adds people to the league.</p>':`<form class="add" id="addMember"><input id="newMember" placeholder="Name" aria-label="Name" maxlength="40"${ro}><button class="btn"${ro}>Add</button></form>`}
-   <p class="small muted">Tap “This is me” on your own name, on each phone or computer you use, so the draft shows when you’re up. Then give your team a name.</p></section>`;
+   <p class="small muted">Tap “This is me” on your own name, on each phone or computer you use, so the draft shows when you’re up. Then give your team a name.${isCommish&&lock?' Give someone a re-pick and they can swap one of their own picks for any undrafted option on the Draft tab.':''}</p></section>`;
   const evs=eventList().map(e=>{const on=!!S.cfg.events?.[e.id]?.active,drafted=S.picks.some(p=>p.sport===e.id);
     return `<div class="ev"><span><strong>${esc(e.name)}</strong><br><span class="small muted">${esc(e.when)}</span></span><span class="row">
      ${on?`<label class="field"><span class="label">Weight</span><select id="evw-${e.id}" data-evw="${e.id}"${ro}>${[0.5,1,1.5,2].map(w=>`<option value="${w}"${evWeight(e.id)===w?' selected':''}>${w}×</option>`).join('')}</select></label>`:''}
-     <button class="btn ${on?'ghost':''} small" data-evtoggle="${e.id}"${drafted||!isCommish?' disabled':''}>${on?'Turn off':'Add to this year'}</button></span></div>`}).join('');
+     ${e.custom&&isCommish?`<button class="btn ghost small" data-evedit="${e.id}">${evEdit===e.id?'Close':'Edit list'}</button>${drafted?'':`<button class="btn ghost small" data-evremove="${e.id}">Delete</button>`}`:''}
+     <button class="btn ${on?'ghost':''} small" data-evtoggle="${e.id}"${drafted||!isCommish?' disabled':''}>${on?'Turn off':'Add to this year'}</button></span></div>
+     ${evEdit===e.id?`<div class="evform"><label class="field"><span class="label">Name</span><input id="evEditName" value="${esc(e.name)}" maxlength="50"></label><label class="field"><span class="label">When</span><input id="evEditWhen" value="${esc(e.when==='Custom event'?'':e.when)}" maxlength="80"></label>
+       <label class="field"><span class="label">Players or teams, one per line (blank = any country)</span><textarea id="evEditPool">${esc((e.pool||[]).join('\n'))}</textarea></label><div><button class="btn small" data-act="saveEv" data-id="${e.id}">Save</button></div></div>`:''}`}).join('');
   const bf=(k,label)=>`<label class="field"><span class="label">${label}</span><input class="n" id="b-${k}" data-bonus="${k}" value="${esc(k==='spoon'?'-'+B(k):B(k))}" inputmode="numeric"${ro}></label>`;
   const sportsPanel=`<section class="panel"><h2>Sports this season</h2><p class="small muted">Choose which sports are in this season’s draft. ${lock?'The draft has started, so these are locked.':'Set these before you start the draft.'}</p>
    <div class="chips">${SPORTS.map(x=>`<button class="chip" data-sporton="${x.id}" aria-pressed="${!!S.cfg.sportsOn?.[x.id]}"${lock||!isCommish?' disabled':''}>${esc(x.short)}</button>`).join('')}</div></section>`;
   return members+sportsPanel+`
   <section class="panel"><h2>Special events</h2><p class="muted small">Turn on the big tournaments that land in your league year. Each person drafts one country or team, scored on the playoff scale (a title is worth ${ladder(5)}). Events added after the main draft get their own mini draft.</p>
    <div>${evs}</div>
-   <form class="add" id="addEvent"><input id="newEvent" placeholder="Another event, e.g. Ryder Cup 2027" aria-label="Custom event name" maxlength="40"${ro}><button class="btn ghost"${ro}>Add event</button></form></section>
+   ${isCommish?`<form class="evform" id="addEvent"><div class="label">Add an event</div>
+     <div class="row"><label class="field"><span class="label">Format</span><select id="evTpl">${Object.entries(EV_TPL).map(([k,t])=>`<option value="${k}">${esc(t.label)}</option>`).join('')}</select></label>
+     <label class="field" style="flex:1 1 200px"><span class="label">Name with year</span><input id="newEvent" placeholder="e.g. Mosconi Cup ${seasonYear(viewSeason)}" maxlength="50"></label>
+     <label class="field" style="flex:1 1 200px"><span class="label">When and where</span><input id="evWhen" placeholder="e.g. Dec ${seasonYear(viewSeason)} · Las Vegas" maxlength="80"></label></div>
+     <label class="field"><span class="label">Players or teams, one per line (optional; leave blank for countries)</span><textarea id="evPool" placeholder="Shane Van Boening&#10;Fedor Gorst&#10;…"></textarea></label>
+     <div><button class="btn ghost">Add event</button></div></form>`:''}</section>
   <section class="panel rules"><h2>Rulebook</h2>
    <dl>
     <dt>Season</dt><dd>Everyone starts at 0 and banks points with each regular-season win, worth 162 ÷ games in the season: NFL 9.5, NBA 2.0, NHL 1.9, Premier League 4.3, MLB 1. Ties and NHL overtime losses count as half a win; Premier League draws as a third.</dd>
@@ -687,6 +821,7 @@ function viewLeague(){
     ${bf('makeIt','Make playoffs')}${bf('perRound','Per round')}${bf('champ','Title')}${bf('best','Best record')}
     ${bf('spoon','Wooden spoon')}${bf('slamWin','Slam title')}${bf('slamFinal','Slam final')}
    </div></section>
+  ${seasonsPanel()}
   ${commishPanel()}
   ${isCommish&&(S.members.some(m=>m.test)||S.picks.length)?`<section class="panel"><h3>Wipe the test</h3><p class="small muted">Deletes every pick, removes the test drafters, undoes manual score changes and puts the draft back in setup. Real people you added stay.</p><div><button class="btn danger" data-act="wipeTest">Wipe test data</button></div>
    ${confirmKey==='wipeTest'?`<div class="confirm"><span>Delete all ${S.picks.length} picks and ${S.members.filter(m=>m.test).length} test drafters?</span><button class="btn danger" data-yes="wipeTest">Wipe it</button><button class="btn ghost" data-no>Cancel</button></div>`:''}</section>`:''}
@@ -758,8 +893,8 @@ async function flush(key,path,getData){if(!db)return;
   if(inflight[key]){again[key]=[path,getData];return}inflight[key]=true;
   try{await db.doc(path).set(getData())}catch(e){fail(e)}inflight[key]=false;
   if(again[key]){const a=again[key];again[key]=null;flush(key,...a)}else dirty[key]=false}
-const saveCfg=()=>queue('cfg','config/main',()=>structuredClone(S.cfg));
-async function setDraft(d){S.draft=d;render();try{await db.doc('draft/main').set(d)}catch(e){fail(e)}}
+const saveCfg=()=>{const k=viewSeason;queue('cfg:'+k,cfgPath(k),()=>{const c=structuredClone(S.cfg);if(k===1&&S.cfgs[1]?.current)c.current=S.cfgs[1].current;return c})};
+async function setDraft(d){const k=viewSeason;S.draft=d;S.drafts[k]=d;render();try{await db.doc(draftPath(k)).set(d)}catch(e){fail(e)}}
 async function makePick(){
   const d=D(),i=draftPicks().length,mid=onClock(i),p=pending;pending=null;if(!p||!mid)return;
   if(p.key&&p.key!==(d.base||0)+':'+i){render();return toast('The pick moved on before you confirmed. Choose again.')}
@@ -770,9 +905,9 @@ async function makePick(){
   if((need(mid)[slotKey]||0)<1){render();return toast(mname(mid)+' already has their '+defOf(slotKey).short+' pick.')}
   const n=nextN(),ref=db.doc('picks/'+pid(n));
   try{const ex=await ref.get();if(ex.exists){toast('Someone just made that pick. The board has refreshed.');render();return}
-    const doc={n,member:mid,sport:p.sport,team:p.team,at:new Date().toISOString(),...(p.flex?{flex:true}:{})};
-    S.picks.push(doc);render();
-    try{await ref.set(doc)}catch(err){S.picks=S.picks.filter(x=>x!==doc);render();throw err}
+    const doc={n,season:viewSeason,member:mid,sport:p.sport,team:p.team,at:new Date().toISOString(),...(p.flex?{flex:true}:{})};
+    S.picks.push(doc);S.allPicks.push(doc);render();
+    try{await ref.set(doc)}catch(err){S.picks=S.picks.filter(x=>x!==doc);S.allPicks=S.allPicks.filter(x=>x!==doc);render();throw err}
     const finished=i+1>=d.order.length*slotsTotal(d.slots);
     await setDraft({...D(),status:finished?'done':'live',clockStart:doc.at,paused:false,pausedElapsed:0});
   }catch(e){fail(e)}
@@ -789,7 +924,7 @@ function bestAvailable(openSports){
     `<div><span>${logoImg(x.id,x.t,'sm')}${esc(x.t)} <span class="muted small">${esc(x.short)}</span></span><span class="num">Proj ${Math.round(x.pp)}</span></div>`).join('')}</div>
     <p class="small muted">Golf and tennis don’t have projections; pick on gut and form.</p></section>`;
 }
-let autoRunning=false,pendingKey='',evOrder=[],needsFor='';
+let autoRunning=false,pendingKey='',evOrder=[],needsFor='',evEdit=null,swapTo=null;
 function evOrderFor(kind){const st=standings().map(r=>r.m.id);
   if(kind==='standings')return st;
   if(kind==='main'){const o=(S.draft?.mainOrder||S.draft?.order||[]).filter(id=>st.includes(id));return [...o,...st.filter(id=>!o.includes(id))]}
@@ -818,10 +953,13 @@ async function autoPick(){
 }
 
 /* ================= Events ================= */
+document.querySelector('.head').addEventListener('click',e=>{const b=e.target.closest('[data-season]');if(b)switchSeason(+b.dataset.season)});
+function switchSeason(k){viewSeason=k;viewSeasonChosen=true;try{localStorage.setItem('gg-season',String(k))}catch(_){}pending=null;confirmKey=null;openRow=null;pickSport=null;swapN=null;applySeason();render()}
 document.querySelector('nav').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.tab;confirmKey=null;pending=null;render();try{localStorage.setItem('gg-tab',tab)}catch(_){}});
 $('#view').addEventListener('click',async e=>{
   const t=e.target.closest('button,tr[data-open]');if(!t)return;const ds=t.dataset;
   if(ds.go){tab=ds.go;render();return}
+  if(ds.season){switchSeason(+ds.season);return}
   if(ds.gday!==undefined){gamesDay=ds.gday==='0'?0:gamesDay+Number(ds.gday);render();return}
   if(ds.tl){tlNote=ds.tl;const n=document.getElementById('tlNote');if(n)n.textContent=tlNote;return}
   if(ds.open){openRow=openRow===ds.open?null:ds.open;render();return}
@@ -834,36 +972,53 @@ $('#view').addEventListener('click',async e=>{
   if(ds.act==='commishIn'){try{await AUTH.signIn();toast(isCommish?'Signed in as commissioner.':'That account isn’t the commissioner.')}catch(err){if(err?.code!=='auth/popup-closed-by-user')toast(err?.code==='auth/unauthorized-domain'?'Add this site under Firebase → Authentication → Settings → Authorized domains.':'Sign-in didn’t work. Try again.')}render();return}
   if(ds.act==='commishOut'){await AUTH.signOut();return}
   if(!canWrite)return;
+  if(ds.swap){swapN=+ds.swap;swapTo=null;swapSport=null;render();document.getElementById('swapPanel')?.scrollIntoView({behavior:'smooth',block:'start'});return}
+  if(ds.swapsport){swapSport=ds.swapsport;swapTo=null;render();return}
+  if(ds.swapto!==undefined){swapTo=ds.swapto||null;render();return}
+  if(ds.act==='cancelSwap'){swapN=null;swapTo=null;render();return}
+  if(ds.act==='doSwap'){await doSwap();return}
   if(ds.claim||ds.unclaim){/* anyone can claim their own name */}
   else if(!ds.pick&&ds.act!=='confirmPick'&&ds.act!=='cancelPick'&&!ds.psport&&!isCommish)return;
   if(ds.move){const [i,dir]=ds.move.split(':').map(Number);const o=draftOrder();[o[i],o[i+dir]]=[o[i+dir],o[i]];return setDraft({...D(),status:'setup',order:o})}
   if(ds.claim){const m=S.members.find(x=>x.id===ds.claim);m.uid=me;render();try{await db.doc('members/'+m.id).set((({id,...r})=>r)(m))}catch(err){fail(err)}return}
   if(ds.unclaim){const m=S.members.find(x=>x.id===ds.unclaim);delete m.uid;render();try{await db.doc('members/'+m.id).set((({id,...r})=>r)(m))}catch(err){fail(err)}return}
   if(ds.del){confirmKey='del:'+ds.del;render();return}
+  if(ds.repick){const [id,dv]=ds.repick.split(':'),m=S.members.find(x=>x.id===id);if(!m)return;
+    m.repicks={...(m.repicks||{}),[viewSeason]:Math.max(0,repicksOf(m)+Number(dv))};render();const {id:_,...rest}=m;try{await db.doc('members/'+id).set(rest)}catch(err){fail(err)}return}
   if(ds.evdraft){confirmKey='ev:'+ds.evdraft;evOrder=evOrderFor('reverse');render();return}
   if(ds.evorder){evOrder=evOrderFor(ds.evorder);render();return}
   if(ds.evmove){const [i,dir]=ds.evmove.split(':').map(Number);[evOrder[i],evOrder[i+dir]]=[evOrder[i+dir],evOrder[i]];render();return}
   if(ds.sporton){S.cfg.sportsOn={...S.cfg.sportsOn,[ds.sporton]:!S.cfg.sportsOn?.[ds.sporton]};saveCfg();render();return}
   if(ds.avpdel){S.cfg.avpEvents=(S.cfg.avpEvents||[]).filter(e=>e.id!==ds.avpdel);saveCfg();render();return}
+  if(ds.evedit){evEdit=evEdit===ds.evedit?null:ds.evedit;render();return}
+  if(ds.evremove){S.cfg.customEvents=(S.cfg.customEvents||[]).filter(c=>c.id!==ds.evremove);const ev={...S.cfg.events};delete ev[ds.evremove];S.cfg.events=ev;saveCfg();render();return}
+  if(ds.act==='saveEv'){const id=ds.id,pool=$('#evEditPool').value.split('\n').map(x=>x.trim()).filter(Boolean);
+    S.cfg.customEvents=(S.cfg.customEvents||[]).map(c=>c.id===id?{...c,name:$('#evEditName').value.trim()||c.name,when:$('#evEditWhen').value.trim(),pool}:c);evEdit=null;saveCfg();render();toast('Event saved.');return}
   if(ds.evtoggle){const id=ds.evtoggle,cur=S.cfg.events?.[id];S.cfg.events={...S.cfg.events,[id]:{active:!cur?.active,weight:cur?.weight||1}};saveCfg();render();return}
   if(ds.yes){const k=ds.yes;confirmKey=null;
+    if(k==='newSeason'){const N=curSeason()+1,pd=S.drafts[N-1]||{},prevCfg=cfgFor(N-1);
+      const cfg={season:seasonLabel(N),bonus:{...DEF_BONUS,...prevCfg.bonus},sportsOn:Object.fromEntries(SPORTS.map(x=>[x.id,true])),events:{},customEvents:[],avpEvents:[],done:{}};
+      const dr={status:'setup',order:pd.mainOrder||pd.order||draftOrder(),pickSeconds:pd.pickSeconds??119.5};
+      try{await db.doc(cfgPath(N)).set(cfg);await db.doc(draftPath(N)).set(dr);await db.doc('config/main').set({current:N},{merge:true});
+        S.cfgs[N]=cfg;S.cfgs[1]={...(S.cfgs[1]||{}),current:N};S.drafts[N]=dr;switchSeason(N);toast(`Season ${N} created. Pick its sports and events, then run the draft.`)}catch(err){fail(err)}return}
     if(k==='start'){const now=new Date().toISOString();return setDraft({status:'live',mainOrder:draftOrder(),order:draftOrder(),slots:mainSlots(),base:nextN(),startedAt:now,clockStart:now,pickSeconds:D().pickSeconds??119.5,paused:false})}
-    if(k==='undo'){const last=draftPicks().at(-1);if(!last)return;S.picks=S.picks.filter(p=>p!==last);S.draft={...D(),status:'live',clockStart:new Date().toISOString(),paused:true,pausedElapsed:0};render();toast('Pick undone. The draft is paused; tap Resume when ready.');
-      try{await db.doc('picks/'+pid(last.n)).delete();await db.doc('draft/main').set(S.draft)}catch(err){fail(err)}return}
+    if(k==='undo'){const last=draftPicks().at(-1);if(!last)return;S.picks=S.picks.filter(p=>p!==last);S.allPicks=S.allPicks.filter(p=>p!==last);S.draft={...D(),status:'live',clockStart:new Date().toISOString(),paused:true,pausedElapsed:0};render();toast('Pick undone. The draft is paused; tap Resume when ready.');
+      try{await db.doc('picks/'+pid(last.n)).delete();await db.doc(draftPath(viewSeason)).set(S.draft)}catch(err){fail(err)}return}
     if(k.startsWith('del:')){const id=k.slice(4);S.members=S.members.filter(m=>m.id!==id);render();try{await db.doc('members/'+id).delete()}catch(err){fail(err)}return}
     if(k.startsWith('ev:')){const id=k.slice(3),now=new Date().toISOString();return setDraft({status:'live',mainOrder:D().mainOrder||D().order||[],order:evOrder.length?[...evOrder]:evOrderFor('reverse'),slots:{[id]:1},base:nextN(),startedAt:now,clockStart:now,pickSeconds:D().pickSeconds??119.5,paused:false})}
     if(k==='wipeTest'){autoRunning=false;const picks=[...S.picks],testers=S.members.filter(m=>m.test),manual=Object.keys(S.results).filter(id=>S.results[id].manual);
-      S.picks=[];S.members=S.members.filter(m=>!m.test);manual.forEach(id=>delete S.results[id]);S.cfg.done={};saveCfg();
+      S.picks=[];S.allPicks=S.allPicks.filter(p=>(p.season||1)!==viewSeason);S.members=S.members.filter(m=>!m.test);manual.forEach(id=>delete S.results[id]);S.cfg.done={};saveCfg();
       S.draft={status:'setup',order:draftOrder(),pickSeconds:D().pickSeconds??119.5};render();
       try{for(const p of picks)await db.doc('picks/'+pid(p.n)).delete();for(const m of testers)await db.doc('members/'+m.id).delete();
-        for(const id of manual)await db.doc('results/'+id).delete();await db.doc('draft/main').set(S.draft);toast('Test wiped. Ready for the real draft.')}catch(err){fail(err)}return}
+        for(const id of manual)await db.doc('results/'+P(viewSeason)+id).delete();await db.doc(draftPath(viewSeason)).set(S.draft);toast('Test wiped. Ready for the real draft.')}catch(err){fail(err)}return}
     if(k==='resetScores'){const ids=Object.keys(S.results).filter(id=>S.results[id].manual);
       S.cfg.done={};saveCfg();for(const id of ids)delete S.results[id];render();
-      try{for(const id of ids)await db.doc('results/'+id).delete();toast(`Scores reset. ${ids.length} corrections removed.`)}catch(err){fail(err)}return}
-    if(k==='reset'){const all=[...S.picks];S.picks=[];render();try{for(const p of all)await db.doc('picks/'+pid(p.n)).delete();await db.doc('draft/main').set({status:'setup',order:draftOrder()});toast('All picks cleared.')}catch(err){fail(err)}return}
+      try{for(const id of ids)await db.doc('results/'+P(viewSeason)+id).delete();toast(`Scores reset. ${ids.length} corrections removed.`)}catch(err){fail(err)}return}
+    if(k==='reset'){const all=[...S.picks];S.picks=[];S.allPicks=S.allPicks.filter(p=>(p.season||1)!==viewSeason);render();try{for(const p of all)await db.doc('picks/'+pid(p.n)).delete();await db.doc(draftPath(viewSeason)).set({status:'setup',order:draftOrder()});toast('All picks cleared.')}catch(err){fail(err)}return}
     return}
   if(ds.act==='shuffle'){const o=draftOrder();for(let i=o.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[o[i],o[j]]=[o[j],o[i]]}return setDraft({...D(),status:'setup',order:o})}
   if(ds.act==='start'){confirmKey='start';render();return}
+  if(ds.act==='newSeason'){confirmKey='newSeason';render();return}
   if(ds.act==='pause'){const d=D();return setDraft({...d,paused:true,pausedElapsed:clockElapsed(d)})}
   if(ds.act==='resume'){const d=D();return setDraft({...d,paused:false,clockStart:new Date(Date.now()-clockElapsed(d)*1000).toISOString()})}
   if(ds.act==='resetClock')return setDraft({...D(),paused:false,pausedElapsed:0,clockStart:new Date().toISOString()});
@@ -879,6 +1034,7 @@ $('#view').addEventListener('click',async e=>{
   if(ds.act==='confirmPick'){makePick();return}
 });
 $('#view').addEventListener('submit',async e=>{e.preventDefault();if(!canWrite)return;const f=e.target;
+  if(f.id==='swapFree'){const v=$('#swapInput').value.trim();if(!v)return;const p=S.picks.find(x=>x.n===swapN);const def=defOf(p?.flex?(swapSport||p.sport):p?.sport);swapTo=poolOf(def).find(x=>slug(x)===slug(v))||v;render();return}
   if(f.id!=='freePick'&&!isCommish)return;
   if(f.id==='freePick'){const v=$('#freeInput').value.trim();if(!v)return;const def=defOf(chooserSport());
     const pool=poolOf(def);pending={sport:def.id,team:pool.find(x=>slug(x)===slug(v))||v,flex:pickSport==='flex',key:(D().base||0)+':'+draftPicks().length};render();return}
@@ -887,11 +1043,13 @@ $('#view').addEventListener('submit',async e=>{e.preventDefault();if(!canWrite)r
     S.members.push({id:ref.id,name,order});render();$('#newMember')?.focus();try{await ref.set({name,order})}catch(err){fail(err)}return}
   if(f.id==='addAvp'){const name=$('#newAvp').value.trim();if(!name)return;const id='t'+Date.now().toString(36);
     S.cfg.avpEvents=[...(S.cfg.avpEvents||[]),{id,name}];saveCfg();render();return}
-  if(f.id==='addEvent'){const name=$('#newEvent').value.trim();if(!name)return;const id='x-'+slug(name).slice(0,30);
+  if(f.id==='addEvent'){const name=$('#newEvent').value.trim();if(!name)return toast('Give the event a name.');const id='x-'+slug(name).slice(0,30),tpl=$('#evTpl').value;
+    const pool=$('#evPool').value.split(/\n|,(?=\s*[A-Z])/).map(x=>x.trim()).filter(Boolean);
     if(eventList().some(x=>x.id===id))return toast('That event is already on the list.');
-    S.cfg.customEvents=[...(S.cfg.customEvents||[]),{id,name}];S.cfg.events={...S.cfg.events,[id]:{active:true,weight:1}};saveCfg();render()}
+    if(EV_TPL[tpl]?.needsPool&&!pool.length)return toast('Paste in the players for this format, one per line.');
+    S.cfg.customEvents=[...(S.cfg.customEvents||[]),{id,name,tpl,when:$('#evWhen').value.trim(),pool}];S.cfg.events={...S.cfg.events,[id]:{active:true,weight:1}};saveCfg();render();toast(name+' added.')}
 });
-function saveResult(sport,team,mut){const id=rid(sport,team);const r={sport,team,...(S.results[id]||{})};mut(r);r.manual=true;S.results[id]=r;queue(id,'results/'+id,()=>S.results[id])}
+function saveResult(sport,team,mut){const k=viewSeason,id=rid(sport,team);const r={sport,team,...(S.results[id]||{})};mut(r);r.manual=true;S.results[id]=r;queue('r:'+k+':'+id,'results/'+P(k)+id,()=>r)}
 function onField(e){const t=e.target;if(!isCommish)return;
   if(t.dataset.pickseconds!==undefined){setDraft({...D(),order:draftOrder(),status:D().status||'setup',pickSeconds:Number(t.value)});return}
   if(t.id==='cfgSeason'){S.cfg.season=t.value;$('#seasonLabel').textContent='League year '+t.value;saveCfg();return}
@@ -907,7 +1065,8 @@ function onField(e){const t=e.target;if(!isCommish)return;
 $('#view').addEventListener('input',e=>{if(e.target.tagName==='INPUT'&&e.target.type!=='checkbox')onField(e)});
 $('#view').addEventListener('change',async e=>{
   if(e.target.dataset.teamname!==undefined){const m=S.members.find(x=>x.id===e.target.dataset.teamname);if(!m||!(isCommish||m.uid===me))return;
-    m.team=e.target.value.trim().slice(0,40);const {id,...rest}=m;try{await db.doc('members/'+id).set(rest);toast(m.team?'Team name saved.':'Team name cleared.')}catch(err){fail(err)}render();return}
+    const val=e.target.value.trim().slice(0,40);m.teamBy={...(m.teamBy||{}),[viewSeason]:val};if(viewSeason===1)m.team=val;
+    const {id,...rest}=m;try{await db.doc('members/'+id).set(rest);toast(val?`Team name saved for season ${viewSeason}.`:'Team name cleared.')}catch(err){fail(err)}render();return}
   if(e.target.dataset.onlyours!==undefined){onlyOurs=e.target.checked;render();return}
   if(e.target.dataset.needsfor!==undefined){needsFor=e.target.value;render();return}
   if(e.target.dataset.draftsort!==undefined){draftSort=e.target.value;try{localStorage.setItem('gg-sort',draftSort)}catch(_){}render();return}
@@ -932,12 +1091,14 @@ function rerender(){
   let got=0;const done=s=>{if(s?.metadata?.fromCache)return;if(++got>=4&&!ready){ready=true;render()}};
   setTimeout(()=>{if(!ready){ready=true;render();toast('Still connecting. Showing what’s loaded.')}},10000);
   db.collection('members').orderBy('order').onSnapshot(s=>{S.members=s.docs.map(d=>({id:d.id,...d.data()}));done(s);rerender()},e=>{done();fail(e)});
-  db.collection('picks').onSnapshot(s=>{S.picks=s.docs.map(d=>({...d.data()})).filter(p=>typeof p.n==='number').sort((a,b)=>a.n-b.n);done(s);rerender()},e=>{done();fail(e)});
-  db.doc('draft/main').onSnapshot(s=>{S.draft=s.exists?{...s.data()}:{status:'setup',order:[]};done(s);rerender()},e=>{done();fail(e)});
-  db.doc('config/main').onSnapshot(s=>{if(!dirty.cfg){const d=s.exists?structuredClone(s.data()):{};S.cfg={...structuredClone(DEF_CFG),...d,bonus:{...DEF_BONUS,...(d.bonus||{})},sportsOn:d.sportsOn||structuredClone(DEF_CFG.sportsOn)}}done(s);rerender()},e=>{done();fail(e)});
-  db.collection('results').onSnapshot(s=>{const next={};s.docs.forEach(d=>next[d.id]=structuredClone(d.data()));for(const k in S.results)if(dirty[k])next[k]=S.results[k];S.results=next;rerender()},fail);
-  db.collection('meta').onSnapshot(s=>{S.meta={};s.docs.forEach(d=>S.meta[d.id]=d.data());rerender()},()=>{});
-  db.collection('history').onSnapshot(s=>{S.history={};s.docs.forEach(d=>S.history[d.id]=d.data());rerender()},()=>{});
+  db.collection('picks').onSnapshot(s=>{S.allPicks=s.docs.map(d=>({...d.data()})).filter(p=>typeof p.n==='number').sort((a,b)=>a.n-b.n);applySeason();done(s);rerender()},e=>{done();fail(e)});
+  db.collection('draft').onSnapshot(s=>{S.drafts={};s.docs.forEach(d=>{const k=d.id==='main'?1:+(d.id.match(/^s(\d+)$/)||[])[1];if(k)S.drafts[k]={...d.data()}});applySeason();done(s);rerender()},e=>{done();fail(e)});
+  db.collection('config').onSnapshot(s=>{S.cfgs={};s.docs.forEach(d=>{const k=d.id==='main'?1:+(d.id.match(/^s(\d+)$/)||[])[1];if(k)S.cfgs[k]=structuredClone(d.data())});
+    if(!viewSeasonChosen){viewSeasonChosen=true;let saved=0;try{saved=+localStorage.getItem('gg-season')||0}catch(_){}viewSeason=saved&&saved<=curSeason()?saved:curSeason()}
+    if(viewSeason>curSeason())viewSeason=curSeason();applySeason();done(s);rerender()},e=>{done();fail(e)});
+  db.collection('results').onSnapshot(s=>{loaded.results=true;S.resultsAll={};s.docs.forEach(d=>S.resultsAll[d.id]=structuredClone(d.data()));applySeason();rerender()},fail);
+  db.collection('meta').onSnapshot(s=>{S.metaAll={};s.docs.forEach(d=>S.metaAll[d.id]=d.data());applySeason();rerender()},()=>{});
+  db.collection('history').onSnapshot(s=>{loaded.history=true;S.historyAll={};s.docs.forEach(d=>S.historyAll[d.id]=d.data());applySeason();rerender()},()=>{});
   db.doc('sync/main').onSnapshot(s=>{S.sync=s.exists?s.data():null;rerender()},()=>{});
 })();
 </script>

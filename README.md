@@ -19,7 +19,7 @@ Total cost: $0. A custom domain is optional, about $12 a year.
 | `config.js` | Your Firebase connection settings (you paste these in during setup) |
 | `firestore.rules` | Who can read and change the league data |
 | `updater/update.mjs` | Pulls standings from ESPN (NFL, NBA, NHL, MLB, Premier League) and Jolpica (F1 drivers) |
-| `updater/seasons.json` | Which season each league counts. Update this once a year |
+| `updater/seasons.json` | Which season each league counted in Gauntlet season 1. Later seasons work out their own years |
 | `.github/workflows/update-scores.yml` | Runs the updater every hour |
 
 ---
@@ -77,11 +77,19 @@ The commissioner (signed in with Google on the League tab) can correct anything 
 
 Everyone else can view the league and make draft picks, but can't change scores or settings.
 
-## Once a year
+## Starting a new season
 
-- Update `updater/seasons.json` to the new seasons (edit it right on GitHub).
-- On the **Scores** tab, uncheck "Season over" for each league. On the **League** tab, change the league year and use **Clear all picks** to start a new draft.
-- Check the Premier League team list. ESPN supplies it automatically once the updater runs, which covers promotion and relegation.
+Each Gauntlet season starts at MLB opening day (late March). Season 1 is 2026–27, season 2 is 2027–28, and so on with no end.
+
+1. On the **League** tab, under **Seasons**, press **Start season N** (commissioner only). The new season gets its own draft, settings, special events, team names and standings. The previous season stays as it was and keeps scoring until its last trophy in June.
+2. Choose the new season's sports and add its special events (pick a format, type the name with the year, paste the player or team list).
+3. Run the draft on the **Draft** tab as usual.
+
+The header has a button for each season; the site opens on the newest one. While two seasons overlap, the Games tab shows owners from both (tagged S1, S2), and the timeline shows the other season's sports faded. Nothing needs editing on GitHub: the updater works out each season's years by itself. `updater/seasons.json` only describes season 1.
+
+## Fixing a bad pick
+
+The commissioner can tap any pick in the Rosters table (Draft tab, after the draft) and swap it for any team or player nobody has drafted. To let a player fix their own pick instead, give them a re-pick with **+** next to their name on the League tab; they then tap one of their own picks. Every swap is listed under **Changes**.
 
 ## If something breaks
 
