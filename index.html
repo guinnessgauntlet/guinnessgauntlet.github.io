@@ -149,8 +149,12 @@ textarea{font:inherit;color:var(--cream);background:var(--panel2);border:1px sol
 .chart text{fill:var(--muted);font-size:11px;font-family:inherit}
 .chart .grid{stroke:var(--rule);stroke-width:1}
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;margin-top:8px}
-.legend span{display:inline-flex;align-items:center;gap:6px}
-.legend i{width:14px;height:3px;border-radius:2px;display:inline-block}
+.legend .chip{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:14px;height:4px;border-radius:2px;display:inline-block}
+.ctip{position:fixed;z-index:20;pointer-events:none;background:var(--panel2);border:1px solid var(--rule);border-radius:6px;padding:6px 9px;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.4);white-space:nowrap}
+.ctip b{display:block}.ctip span{color:var(--muted);font-size:12px}
+.chart.hovering .sline:not(.hot){opacity:.15}
+.chart.hovering .sline.hot{opacity:1}
 .rough{color:var(--amber);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
 .tl-line.end span{color:var(--amber);font-weight:700}
 .tl-line.today span{color:var(--cream);font-weight:700}
@@ -471,6 +475,7 @@ function render(){
   if(!ready)return;
   const others=liveSeasons().filter(k=>k!==viewSeason);
   const banner=others.length?`<div class="notice" style="color:var(--cream)">${others.map(k=>k<viewSeason?`Season ${k} is still finishing (it ends around ${fmtDay(seasonEnd(k))}). <button class="btn ghost small" data-season="${k}">View season ${k}</button>`:`Season ${k} has started. <button class="btn ghost small" data-season="${k}">View season ${k}</button>`).join(' ')}</div>`:'';
+  document.querySelectorAll('.ctip').forEach(x=>x.remove());
   $('#view').innerHTML=(tab==='games'?'':banner)+({standings:viewStandings,games:viewGames,draft:viewDraft,scores:viewScores,stats:viewStats,league:viewLeague}[tab])();
   tick();
   setTimeout(saveSnapshots,0);
@@ -832,13 +837,15 @@ function projItem(sport,team){const sp=defOf(sport);
 function projections(){return S.members.map(m=>{const items=S.picks.filter(p=>p.member===m.id).map(p=>({p,...projItem(p.sport,p.team)}));
   return {m,items,now:items.reduce((a,i)=>a+i.now,0),proj:items.reduce((a,i)=>a+i.proj,0)}}).sort((a,b)=>b.proj-a.proj)}
 let statMode='rank',statOpen=null;
-const LINE_COLORS=['#e8b04a','#6fb7e8','#e8746f','#8fd18f','#c79ae8','#e3dc72','#5fd6c8','#e8a06f','#b9b9b9','#f08fc0','#7f8fe8','#a8d65f'];
+const LINE_COLORS=['#f2c14e','#5aa9e6','#e5604d','#7bc96f','#b48ee6','#f28fb1','#4fd1c5','#ff9f43','#d9d9d9','#a3e635','#8b9cf7','#c08457'];
+let statFocus=null;
 function historyChart(){
-  const keys=Object.keys(S.history).filter(k=>/^\d{4}-\d\d-\d\d$/.test(k)).sort();
+  // Skip snapshots taken before anyone had points (everyone tied), which would start every line at 1st.
+  const keys=Object.keys(S.history).filter(k=>/^\d{4}-\d\d-\d\d$/.test(k)&&Object.values(S.history[k].totals||{}).some(v=>v>0)).sort();
   const today=dayKey(),rows=standings(),liveRanks=rankMap(rows);
   const pts=[...keys.filter(k=>k!==today).map(k=>({k,...S.history[k]})),{k:today,ranks:liveRanks,totals:Object.fromEntries(rows.map(r=>[r.m.id,r.total]))}];
   if(pts.length<2)return `<p class="small muted">The graph fills in as the site saves one snapshot a day (the first time anyone opens it). Check back in a couple of days.</p>`;
-  const W=800,H=300,L=44,Rm=12,T=12,Bm=28,ids=S.members.map(m=>m.id),byRank=statMode==='rank';
+  const W=900,H=340,L=44,Rm=170,T=14,Bm=28,ids=S.members.map(m=>m.id),byRank=statMode==='rank';
   const t0=Date.parse(pts[0].k),t1=Date.parse(pts.at(-1).k),x=k=>L+(t1===t0?0:(Date.parse(k)-t0)/(t1-t0))*(W-L-Rm);
   const vals=pts.flatMap(q=>ids.map(id=>byRank?q.ranks?.[id]:q.totals?.[id]).filter(v=>v!=null));
   const lo=byRank?1:Math.min(0,...vals),hi=byRank?Math.max(2,ids.length):Math.max(10,...vals)*1.05;
@@ -846,12 +853,22 @@ function historyChart(){
   const ticks=byRank?ids.map((_,i)=>i+1):[0,1,2,3,4].map(i=>lo+(hi-lo)*i/4);
   const grid=ticks.map(v=>`<line class="grid" x1="${L}" x2="${W-Rm}" y1="${y(v)}" y2="${y(v)}"/><text x="${L-8}" y="${y(v)+4}" text-anchor="end">${byRank?ordinal(v):Math.round(v)}</text>`).join('');
   const nX=Math.min(6,pts.length),xl=Array.from({length:nX},(_,i)=>pts[Math.round(i*(pts.length-1)/Math.max(1,nX-1))]).map((q,i,a)=>`<text x="${x(q.k)}" y="${H-8}" text-anchor="${i===0?'start':i===a.length-1?'end':'middle'}">${new Date(q.k+'T12:00:00').toLocaleDateString([], {month:'short',day:'numeric'})}</text>`).join('');
-  const myId=myMember()?.id;
-  const lines=S.members.map((m,i)=>{const c=LINE_COLORS[i%LINE_COLORS.length],seq=pts.map(q=>[q.k,byRank?q.ranks?.[m.id]:q.totals?.[m.id]]).filter(([,v])=>v!=null);if(!seq.length)return '';
-    const d=seq.map(([k,v],j)=>(j?'L':'M')+x(k).toFixed(1)+' '+y(v).toFixed(1)).join(' '),last=seq.at(-1);
-    return `<path d="${d}" fill="none" stroke="${c}" stroke-width="${m.id===myId?3.5:2}" stroke-linejoin="round" stroke-linecap="round" opacity="${myId&&m.id!==myId?.8:1}"><title>${esc(teamOf(m)||m.name)}</title></path><circle cx="${x(last[0])}" cy="${y(last[1])}" r="${m.id===myId?4.5:3.5}" fill="${c}"/>`}).join('');
+  const myId=myMember()?.id,focus=statFocus&&S.members.some(m=>m.id===statFocus)?statFocus:null;
+  const nm=m=>{const t=teamOf(m)||m.name;return t.length>18?t.slice(0,17)+'…':t};
+  const series=S.members.map((m,i)=>({m,c:LINE_COLORS[i%LINE_COLORS.length],seq:pts.map(q=>[q.k,byRank?q.ranks?.[m.id]:q.totals?.[m.id]]).filter(([,v])=>v!=null)})).filter(s=>s.seq.length);
+  // End labels: one per line at its last point, nudged apart so they never overlap.
+  const labs=series.map(s=>({s,y:y(s.seq.at(-1)[1])})).sort((a,b)=>a.y-b.y);
+  for(let i=1;i<labs.length;i++)if(labs[i].y-labs[i-1].y<14)labs[i].y=labs[i-1].y+14;
+  const over=labs.length?labs.at(-1).y-(H-Bm):0;if(over>0)labs.forEach(l=>l.y-=over);
+  const dim=id=>focus&&id!==focus;
+  const draw=s=>{const {m,c,seq}=s,d=seq.map(([k,v],j)=>(j?'L':'M')+x(k).toFixed(1)+' '+y(v).toFixed(1)).join(' '),last=seq.at(-1),big=m.id===focus||(!focus&&m.id===myId);
+    const tip=`${teamOf(m)||m.name}${teamOf(m)&&teamOf(m)!==m.name?' · '+m.name:''}|${byRank?ordinal(last[1])+' now':f1(last[1])+' pts now'}`;
+    return `<g class="sline" data-statfocus="${m.id}" data-tip="${esc(tip)}" style="cursor:pointer" opacity="${dim(m.id)?.15:1}"><path d="${d}" fill="none" stroke="transparent" stroke-width="14"/><path d="${d}" fill="none" stroke="${c}" stroke-width="${big?4:2.25}" stroke-linejoin="round" stroke-linecap="round"/>${seq.map(([k,v])=>`<circle cx="${x(k)}" cy="${y(v)}" r="${big?3.5:2.5}" fill="${c}"/>`).join('')}<circle cx="${x(last[0])}" cy="${y(last[1])}" r="${big?5:4}" fill="${c}"/><title>${esc(teamOf(m)||m.name)}</title></g>`};
+  const lines=[...series.filter(s=>s.m.id!==focus),...series.filter(s=>s.m.id===focus)].map(draw).join('')
+    +labs.map(({s,y:ly})=>`<g data-statfocus="${s.m.id}" style="cursor:pointer" opacity="${dim(s.m.id)?.25:1}"><line x1="${x(s.seq.at(-1)[0])+6}" x2="${W-Rm+10}" y1="${y(s.seq.at(-1)[1])}" y2="${ly}" stroke="${s.c}" stroke-width="1" opacity=".6"/><text x="${W-Rm+14}" y="${ly+4}" style="fill:${s.c};font-size:12px;font-weight:${s.m.id===focus||s.m.id===myId?700:500}">${esc(nm(s.m))}${byRank?'':' '+Math.round(s.seq.at(-1)[1])}</text></g>`).join('');
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${byRank?'Place':'Points'} over time">${grid}${xl}${lines}</svg>
-    <div class="legend">${S.members.map((m,i)=>`<span><i style="background:${LINE_COLORS[i%LINE_COLORS.length]}"></i>${esc(teamOf(m)||m.name)}</span>`).join('')}</div>`}
+    <div class="legend">${S.members.map((m,i)=>`<button class="chip" data-statfocus="${m.id}" aria-pressed="${m.id===focus}"><i style="background:${LINE_COLORS[i%LINE_COLORS.length]}"></i>${esc(teamOf(m)||m.name)}</button>`).join('')}</div>
+    <p class="small muted">Tap a name or a line to highlight it; tap again to show everyone.</p>`}
 function titleOddsPanel(){
   const sports=SPORTS.filter(x=>x.kind==='team'&&S.meta[x.id]?.titleOdds);if(!sports.length)return '';
   const rows=S.members.map(m=>{const picks=S.picks.filter(p=>p.member===m.id&&sports.some(x=>x.id===p.sport)).map(p=>({p,o:oddsOf(p.sport,p.team)})).filter(x=>x.o);
@@ -1059,7 +1076,8 @@ document.querySelector('.head').addEventListener('click',e=>{const b=e.target.cl
 function switchSeason(k){viewSeason=k;viewSeasonChosen=true;try{localStorage.setItem('gg-season',String(k))}catch(_){}pending=null;confirmKey=null;openRow=null;pickSport=null;swapN=null;applySeason();render()}
 document.querySelector('nav').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.tab;confirmKey=null;pending=null;render();try{localStorage.setItem('gg-tab',tab)}catch(_){}});
 $('#view').addEventListener('click',async e=>{
-  const t=e.target.closest('button,tr[data-open]');if(!t)return;const ds=t.dataset;
+  const t=e.target.closest('button,tr[data-open],[data-statfocus]');if(!t)return;const ds=t.dataset;
+  if(ds.statfocus){statFocus=statFocus===ds.statfocus?null:ds.statfocus;render();return}
   if(ds.go){tab=ds.go;render();return}
   if(ds.season){switchSeason(+ds.season);return}
   if(ds.gsort){gamesByTime=ds.gsort==='time';try{localStorage.setItem('gg-gamesort',ds.gsort)}catch(_){}render();return}
@@ -1177,6 +1195,16 @@ $('#view').addEventListener('change',async e=>{
   if(e.target.dataset.draftsort!==undefined){draftSort=e.target.value;try{localStorage.setItem('gg-sort',draftSort)}catch(_){}render();return}
   if(e.target.tagName==='SELECT'||e.target.type==='checkbox')onField(e)});
 
+/* Chart hover: name tooltip and highlight while the pointer is over a line. */
+(()=>{let tipEl=null;
+  const hide=()=>{tipEl?.remove();tipEl=null;document.querySelectorAll('.chart.hovering').forEach(c=>c.classList.remove('hovering'));document.querySelectorAll('.sline.hot').forEach(g=>g.classList.remove('hot'))};
+  $('#view').addEventListener('pointermove',e=>{const g=e.target.closest?.('.sline');if(!g){if(tipEl)hide();return}
+    const [name,val]=(g.dataset.tip||'').split('|');if(!tipEl){tipEl=document.createElement('div');tipEl.className='ctip';document.body.appendChild(tipEl)}
+    tipEl.innerHTML=`<b>${esc(name)}</b><span>${esc(val||'')}</span>`;
+    const w=tipEl.offsetWidth;tipEl.style.left=Math.min(window.innerWidth-w-8,e.clientX+14)+'px';tipEl.style.top=(e.clientY-44)+'px';
+    const svg=g.closest('.chart');document.querySelectorAll('.sline.hot').forEach(x=>{if(x!==g)x.classList.remove('hot')});g.classList.add('hot');svg.classList.add('hovering')});
+  $('#view').addEventListener('pointerleave',hide);document.addEventListener('scroll',hide,{passive:true});
+})();
 /* ================= Live data ================= */
 window.addEventListener('pageshow',e=>{if(e.persisted)location.reload()});
 try{tab=localStorage.getItem('gg-tab')||tab}catch(_){}
