@@ -115,6 +115,7 @@ input.n{width:4.6em;font-family:var(--f-mono);text-align:center}
 .rules dt{font-weight:600}.rules dd{margin:0;color:var(--muted)}
 .ev{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--rule)}
 .ev:last-child{border-bottom:0}
+.tname{font-weight:600;display:block}.pname{display:block;font-size:12px;color:var(--muted)}
 .tag{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border:1px solid currentColor;border-radius:999px;padding:1px 7px}
 .tag.done{color:var(--amber)} .tag.live{color:var(--good)}
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--cream);color:var(--ink);font-weight:600;padding:9px 14px;border-radius:8px;font-size:14px;z-index:20;max-width:calc(100% - 32px)}
@@ -210,7 +211,7 @@ const SLAM_WL={R128:[0,1],R64:[1,1],R32:[2,1],R16:[3,1],QF:[4,1],SF:[5,1],F:[6,1
 const KO=['Out in group stage','Lost Round of 16','Lost quarterfinal','Lost semifinal','Lost final','Champions'];
 const MEDAL=['Outside top 20 in medals','11th–20th in medals','6th–10th in medals','4th–5th in medals','2nd–3rd in medals','Top of the medal table'];
 const EVENTS=[
- {id:'mc26',name:'Mosconi Cup 2026',short:'Mosconi',when:'Nov 27–30, 2026 · Orlando · pick one player',pool:T('Shane Van Boening|Tyler Styer|Fedor Gorst|Justin Bergman|Skyler Woodward|Francisco Sánchez Ruiz|Joshua Filler|Aleksa Pecelj|David Alcaide|Jayson Shaw'),pickLabel:'Type a player',ladder:['Losing team, 0–1 match wins','Losing team, 2+ match wins','Winning team, 0–1 match wins','Winning team, 2 match wins','Winning team, 3+ match wins','Winning team MVP']},
+ {id:'mc26',name:'Mosconi Cup 2026',short:'Mosconi',when:'Nov 27–30, 2026 · Orlando · pick one player',pool:T('Shane Van Boening|Tyler Styer|Fedor Gorst|Justin Bergman|Skyler Woodward|Francisco Sánchez Ruiz|Joshua Filler|Aleksa Pecelj|David Alcaide|Jayson Shaw'),pickLabel:'Type a player',perWin:{win:4,team:10,mvp:10},ladder:['','','','','','']},
  {id:'wwc27',name:"Women's World Cup 2027",short:'WWC',when:'Jun–Jul 2027 · Brazil',ladder:KO},
  {id:'rwc27',name:'Rugby World Cup 2027',short:'RWC',when:'Oct–Nov 2027 · Australia',ladder:KO},
  {id:'cwc27',name:'Cricket World Cup 2027',short:'CWC',when:'Oct–Nov 2027 · southern Africa',ladder:['Out in group stage','Out in Super Six',null,'Lost semifinal','Lost final','Champions']},
@@ -242,6 +243,9 @@ const f1=n=>(Math.round(n*10)/10).toFixed(1);
 const slug=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/ø/g,'o').replace(/&/g,'and').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
 const rid=(sport,team)=>sport+'__'+slug(team);
 const mname=id=>S.members.find(m=>m.id===id)?.name||'Someone';
+// Team name with the person's name beneath it (or just the person if no team name yet)
+const whoHtml=(id,small=true)=>{const m=S.members.find(x=>x.id===id);if(!m)return 'Someone';
+  return m.team?`<span class="tname">${esc(m.team)}</span>${small?`<span class="pname">${esc(m.name)}</span>`:''}`:esc(m.name)};
 function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,2800)}
 const B=k=>{const v=Number(S.cfg.bonus?.[k]);const n=Number.isFinite(v)?v:DEF_BONUS[k];return k==='spoon'?Math.abs(n):n};
 const isDone=id=>S.cfg.done?.[id]??!!S.meta[id]?.done;
@@ -272,6 +276,8 @@ const posStage=(id,pos)=>{if(!pos)return 0;
 function pctOf(sp,r){if(!r)return null;const w=+r.w||0,l=+r.l||0,x=+r.x||0,gp=w+l+x;return gp?(w+(sp.xw||0)*x)/gp:null}
 function teamScore(sp,team){
   const r=S.results[rid(sp.id,team)];
+  if(sp.kind==='event'&&sp.perWin){const P=sp.perWin,w=Math.max(0,+r?.w||0),post=(w*P.win+(r?.teamWon?P.team:0)+(r?.mvp?P.mvp:0))*evWeight(sp.id);
+    return {season:0,post,best:0,pts:post,stage:r?.teamWon?5:0,r,label:`${w} match win${w===1?'':'s'}${r?.teamWon?' · won the Cup':''}${r?.mvp?' · MVP':''}`}}
   if(sp.kind==='event'){const st=r?.stage|0,post=ladder(st)*evWeight(sp.id);return {season:0,post,best:0,pts:post,stage:st,r}}
   let season=0,stage=r?.stage|0,pct=null,best=0,spoon=0;
   if(sp.kind==='f1'){const N=Number(S.meta.f1?.teams)||22,pos=+r?.pos||0,f=S.meta.f1;
@@ -371,11 +377,11 @@ function viewStandings(){
   const cols=columns(),rows=standings();let prev=null,rank=0;
   const body=rows.map((r,i)=>{if(r.total!==prev){rank=i+1;prev=r.total}
     const isOpen=openRow===r.m.id;
-    return `<tr class="click ${rank===1?'lead':''}" data-open="${r.m.id}" aria-expanded="${isOpen}"><td class="num l">${rank}</td><td class="l">${esc(r.m.name)}${r.m.uid&&r.m.uid===me?' <span class="you">You</span>':''}</td>${cols.map(c=>`<td class="num">${f1(r.by[c.id].pts)}</td>`).join('')}<td class="num total">${f1(r.total)}</td></tr>`
+    return `<tr class="click ${rank===1?'lead':''}" data-open="${r.m.id}" aria-expanded="${isOpen}"><td class="num l">${rank}</td><td class="l">${whoHtml(r.m.id)}${r.m.uid&&r.m.uid===me?' <span class="you">You</span>':''}</td>${cols.map(c=>`<td class="num">${f1(r.by[c.id].pts)}</td>`).join('')}<td class="num total">${f1(r.total)}</td></tr>`
       +(isOpen?`<tr class="detail"><td colspan="${cols.length+3}">${breakdown(r,cols)}</td></tr>`:'')}).join('');
   const lead=rows[0],pints=S.members.length-1;
   const leaders=cols.map(c=>{const best=rows.map(r=>({r,v:r.by[c.id].pts})).sort((a,b)=>b.v-a.v)[0];return best&&best.v>0?`<div><span>${esc(c.short)}</span><span>${esc(best.r.m.name)} <span class="num muted">${f1(best.v)}</span></span></div>`:''}).join('');
-  return `<div class="clock"><span class="label" style="color:inherit;opacity:.7">The stakes</span><div class="who" style="font-size:30px">🍺 ${esc(lead.m.name)} is owed ${pints} pint${pints===1?'':'s'}</div><div class="meta">Losers each buy the winner a Guinness when the season ends.</div></div>
+  return `<div class="clock"><span class="label" style="color:inherit;opacity:.7">The stakes</span><div class="who" style="font-size:30px">🍺 ${esc(lead.m.team||lead.m.name)} is owed ${pints} pint${pints===1?'':'s'}</div><div class="meta">Losers each buy the winner a Guinness when the season ends.</div></div>
   <section class="panel"><div class="cardhead"><h2>Standings</h2><span class="small muted">Tap a name for their teams</span></div>
    <div class="scroll"><table><tr><th class="l">#</th><th class="l">Name</th>${cols.map(c=>`<th title="${esc(c.name)}">${esc(c.short)}</th>`).join('')}<th>Total</th></tr>${body}</table></div>
    <p class="small muted">Everyone starts at 0. Each win is worth 162 ÷ the league’s season length (an NFL win is 9.5, an MLB win is 1), so a perfect season is worth the same in every sport. Playoff, title and best-record bonuses add on; the wooden spoon takes 10 away.</p></section>
@@ -388,7 +394,7 @@ function breakdown(r,cols){
     if(c.kind==='golf'||c.kind==='tennis'||c.kind==='avp'){if(!s.items.length)return [];
       return s.items.map(it=>`<tr><td class="l">${c.short}</td><td class="l">${esc(it.team)}</td><td class="l num">${(c.kind==='golf'?it.pos:c.kind==='avp'?it.codes.map(v=>AVP_FIN.find(f=>f[0]===v)?.[1]):it.res).map(v=>esc(v||'–')).join(' · ')||'–'}</td><td></td><td></td></tr>`)
         .concat(`<tr><td class="l">${c.short}</td><td class="l muted">${s.note}</td><td></td><td class="num">${f1(s.season)} + ${f1(s.post)}</td><td class="num">${f1(s.pts)}</td></tr>`)}
-    return s.items.map(it=>{const lab=c.ladder[it.stage]||'';
+    return s.items.map(it=>{const lab=it.label||c.ladder?.[it.stage]||'';
       return `<tr><td class="l">${esc(c.short)}</td><td class="l">${logoImg(c.id,it.team,'sm')}${esc(it.team)}</td><td class="l num">${c.kind==='event'?esc(lab):record(c,it.r)+(it.stage?` · ${esc(lab)}`:'')}${it.best?' · best record':''}${it.spoon?' · wooden spoon':''}</td><td class="num">${c.kind==='event'?'':f1(it.season)+' + '}${f1(it.post+it.best-(it.spoon||0))}</td><td class="num">${f1(it.pts)}</td></tr>`})});
   return `<div class="scroll"><table><tr><th class="l">Sport</th><th class="l">Pick</th><th class="l">Record</th><th>Season + bonus</th><th>Pts</th></tr>${rows.join('')||'<tr><td class="l muted" colspan="5">No picks yet</td></tr>'}</table></div>`;
 }
@@ -432,7 +438,7 @@ function viewDraft(){
        ${Object.keys(tk).length?`<p class="small muted">Taken: ${S.picks.filter(p=>p.sport===def.id).map(p=>esc(p.team)+' ('+esc(mname(p.member))+')').join(', ')}</p>`:''}`}
     const nextUp=[1,2].map(k=>i+k<total?esc(mname(onClock(i+k))):null).filter(Boolean);
     top=`<div class="clock"><div class="clockrow"><div><span class="label" style="color:inherit;opacity:.7">On the clock · Pick ${i+1} of ${total} · Round ${Math.floor(i/N)+1}</span>
-      <div class="who">${esc(mine?.name||'?')} ${mine?.uid&&mine.uid===me?'<span class="you">You</span>':''}</div>
+      <div class="who">${esc(mine?.name||'?')} ${mine?.uid&&mine.uid===me?'<span class="you">You</span>':''}</div>${mine?.team?`<div class="meta">${esc(mine.team)}</div>`:''}
       <div class="meta">${nextUp.length?'Then: '+nextUp.join(', '):'Last pick of the draft'}</div></div>
       ${d.pickSeconds?`<div class="timer" id="timer">${PINT}<div><div class="tleft" id="tLeft">${Number(d.pickSeconds).toFixed(1)}</div><div class="tsub" id="tSub">seconds</div></div></div>`:''}</div>
       ${isCommish?`<div class="tctl"><button class="btn ghost small" data-act="autoPick">Auto-pick for ${esc(mine?.name||'them')}</button><button class="btn ghost small" data-act="autoAll">${autoRunning?'Stop auto-draft':'Auto-draft the rest'}</button></div>`:''}
@@ -466,12 +472,12 @@ function viewDraft(){
   const cell=(id,c)=>S.picks.filter(p=>p.member===id&&(c.id==='flex'?p.flex:p.sport===c.id&&!p.flex)).map(p=>logoImg(p.sport,p.team,'sm')+esc(p.team)+(c.id==='flex'?` <span class="muted small">${esc(defOf(p.sport).short)}</span>`:'')).join('<br>')||'<span class="muted">–</span>';
   const specials=evCols.length?`<section class="panel"><h3>Special drafts</h3>
     <div class="scroll"><table class="roster"><tr><th class="l">Name</th>${evCols.map(c=>`<th class="l">${esc(c.name)}<div class="small muted" style="text-transform:none;letter-spacing:0;font-weight:500">${esc(c.when||'')}</div></th>`).join('')}</tr>
-    ${S.members.map(m=>m.id).map(id=>`<tr><td class="l">${esc(mname(id))}</td>${evCols.map(c=>`<td class="l">${cell(id,c)}</td>`).join('')}</tr>`).join('')}</table></div></section>`:'';
+    ${S.members.map(m=>m.id).map(id=>`<tr><td class="l">${whoHtml(id)}</td>${evCols.map(c=>`<td class="l">${cell(id,c)}</td>`).join('')}</tr>`).join('')}</table></div></section>`:'';
   const last=picks.at(-1);
   const board=`<section class="panel"><div class="cardhead"><h3>Rosters</h3>${picks.length&&isCommish?`<button class="btn ghost small" data-act="undo">Undo last pick</button>`:''}</div>
     ${confirmKey==='undo'&&last&&d.status!=='live'?`<div class="confirm"><span>Undo ${esc(last.team)} (${esc(mname(last.member))})?</span><button class="btn danger" data-yes="undo">Undo pick</button><button class="btn ghost" data-no>Keep it</button></div>`:''}
     <div class="scroll"><table class="roster${cols.length>8?' dense':''}"><tr><th class="l">Name</th>${cols.map(c=>`<th class="l">${esc(c.short)}</th>`).join('')}</tr>
-    ${people.map(id=>`<tr><td class="l">${esc(mname(id))}</td>${cols.map(c=>`<td class="l">${cell(id,c)}</td>`).join('')}</tr>`).join('')}</table></div>
+    ${people.map(id=>`<tr><td class="l">${whoHtml(id)}</td>${cols.map(c=>`<td class="l">${cell(id,c)}</td>`).join('')}</tr>`).join('')}</table></div>
     ${picks.length?`<div class="label">Latest picks</div><div class="list">${picks.slice(-5).reverse().map(p=>`<div><span><span class="num muted">#${p.n-(d.base||0)+1}</span> ${esc(mname(p.member))}</span><span>${esc(p.team)} <span class="muted small">${esc(defOf(p.sport)?.short)}</span></span></div>`).join('')}</div>`:''}
   </section>`;
   const meClaimed=S.members.some(m=>m.uid&&m.uid===me);
@@ -506,9 +512,11 @@ function viewScores(){
   else body=picks.map(p=>{const r=S.results[rid(scoreSport,p.team)]||{},sc=teamScore(def,p.team);
     const fld=(k,label)=>`<label class="field"><span class="label">${label}</span><input class="n" id="r-${slug(p.team)}-${k}" data-res="${esc(p.team)}" data-k="${k}" value="${esc(r[k]??'')}" inputmode="numeric"${ro}></label>`;
     return `<div class="card"><div class="cardhead"><strong>${logoImg(scoreSport,p.team,'lg')}${esc(p.team)}</strong><span><span class="muted small">${esc(mname(p.member))} · </span><span class="pts">${f1(sc.pts)}</span></span></div>
-     <div class="row">${def.kind==='event'?'':def.kind==='f1'?fld('pos','Position')+fld('pts','Points'):fld('w','Wins')+fld('l','Losses')+(def.x?fld('x',def.xName):'')+(def.kind==='table'?fld('pos','Position'):'')}
-      ${def.kind==='team'||def.kind==='event'?`<label class="field grow"><span class="label">${def.kind==='event'?'Result':'Postseason'}</span><select id="r-${slug(p.team)}-stage" data-res="${esc(p.team)}" data-k="stage"${ro}>${def.ladder.map((lab,i)=>lab?`<option value="${i}"${(r.stage|0)===i?' selected':''}>${esc(lab)} (+${f1(ladder(i)*(def.kind==='event'?evWeight(def.id):1))})</option>`:'').join('')}</select></label>`:''}</div>
-     ${def.kind==='event'?'':`<div class="small muted">${sc.season?`${f1(sc.season)} season pts`:'No results yet'}${sc.post?` · +${f1(sc.post)} postseason`:''}${sc.best?` · +${f1(sc.best)} best record`:''}${sc.spoon?` · −${f1(sc.spoon)} wooden spoon`:''}</div>`}</div>`}).join('');
+     <div class="row">${def.perWin?`${fld('w','Match wins')}
+        <label class="row small" style="align-items:center;gap:6px"><input type="checkbox" id="r-${slug(p.team)}-teamWon" data-res="${esc(p.team)}" data-k="teamWon"${r.teamWon?' checked':''}${ro}> His team won the Cup (+${def.perWin.team})</label>
+        <label class="row small" style="align-items:center;gap:6px"><input type="checkbox" id="r-${slug(p.team)}-mvp" data-res="${esc(p.team)}" data-k="mvp"${r.mvp?' checked':''}${ro}> MVP (+${def.perWin.mvp})</label>`:def.kind==='event'?'':def.kind==='f1'?fld('pos','Position')+fld('pts','Points'):fld('w','Wins')+fld('l','Losses')+(def.x?fld('x',def.xName):'')+(def.kind==='table'?fld('pos','Position'):'')}
+      ${def.kind==='team'||(def.kind==='event'&&!def.perWin)?`<label class="field grow"><span class="label">${def.kind==='event'?'Result':'Postseason'}</span><select id="r-${slug(p.team)}-stage" data-res="${esc(p.team)}" data-k="stage"${ro}>${def.ladder.map((lab,i)=>lab?`<option value="${i}"${(r.stage|0)===i?' selected':''}>${esc(lab)} (+${f1(ladder(i)*(def.kind==='event'?evWeight(def.id):1))})</option>`:'').join('')}</select></label>`:''}</div>
+     ${def.perWin?`<div class="small muted">${def.perWin.win} per match won · +${def.perWin.team} if his team wins · +${def.perWin.mvp} for MVP</div>`:def.kind==='event'?'':`<div class="small muted">${sc.season?`${f1(sc.season)} season pts`:'No results yet'}${sc.post?` · +${f1(sc.post)} postseason`:''}${sc.best?` · +${f1(sc.best)} best record`:''}${sc.spoon?` · −${f1(sc.spoon)} wooden spoon`:''}</div>`}</div>`}).join('');
   const doneCtl=auto&&isCommish?`<label class="row small" style="align-items:center;gap:8px"><input type="checkbox" id="done-${def.id}" data-done="${def.id}"${isDone(def.id)?' checked':''}${ro}> Regular season is over (locks in ${def.kind==='team'?'the best-record bonus and wooden spoon':'final-position bonuses and penalties'})</label>`:'';
   return `${chips}<section class="panel"><div class="cardhead"><h2>${esc(def.name)}</h2>${auto?`<span class="tag ${isDone(def.id)?'done':'live'}">${isDone(def.id)?'Season over':'Auto-updating'}</span>`:def.when?`<span class="small muted">${esc(def.when)}</span>`:''}</div>
    <p class="small muted">${def.kind==='avp'?'Choose which tournaments count this season, then enter each pair’s finish.':def.kind==='event'?'The commissioner sets each country’s result as the event plays out.':'Updates automatically every hour'+(def.kind==='team'?', including playoff rounds':def.kind==='golf'?' once each major finishes':def.kind==='tennis'?' as each Slam plays out':'')+'.'}${isCommish?' As commissioner you can correct anything here; a corrected result stays put until you change it again.':''}</p>
@@ -517,13 +525,13 @@ function viewScores(){
 function viewLeague(){
   const ro=isCommish?'':' disabled',lock=S.picks.length>0;
   const members=`<section class="panel"><h2>The field</h2>
-   ${S.members.length?`<div class="list">${S.members.map(m=>`<div><span>${esc(m.name)} ${m.uid&&m.uid===me?'<span class="you">You</span>':''}</span><span class="row">
+   ${S.members.length?`<div class="list">${S.members.map(m=>`<div><span>${esc(m.name)} ${m.uid&&m.uid===me?'<span class="you">You</span>':''}${(isCommish||(m.uid&&m.uid===me))?`<br><input id="tn-${m.id}" data-teamname="${m.id}" value="${esc(m.team||'')}" placeholder="Team name" maxlength="40" aria-label="Team name for ${esc(m.name)}" style="margin-top:6px;width:min(260px,70vw)">`:m.team?`<br><span class="small muted">${esc(m.team)}</span>`:''}</span><span class="row">
      ${!m.uid&&!S.members.some(x=>x.uid===me)?`<button class="btn ghost small" data-claim="${m.id}"${canWrite?'':' disabled'}>This is me</button>`:''}
      ${m.uid===me?`<button class="btn ghost small" data-unclaim="${m.id}"${canWrite?'':' disabled'}>Not me</button>`:''}
      ${!lock&&isCommish?`<button class="btn ghost small" data-del="${m.id}">Remove</button>`:''}</span></div>`).join('')}</div>`:'<p class="muted">No one yet. Add the first person below.</p>'}
    ${confirmKey?.startsWith('del:')?`<div class="confirm"><span>Remove ${esc(mname(confirmKey.slice(4)))}?</span><button class="btn danger" data-yes="${confirmKey}">Remove</button><button class="btn ghost" data-no>Keep</button></div>`:''}
    ${lock?'<p class="small muted">The draft has started, so the field is locked.</p>':!isCommish?'<p class="small muted">The commissioner adds people to the league.</p>':`<form class="add" id="addMember"><input id="newMember" placeholder="Name" aria-label="Name" maxlength="40"${ro}><button class="btn"${ro}>Add</button></form>`}
-   <p class="small muted">Tap “This is me” on your own name, on each phone or computer you use, so the draft shows when you’re up.</p></section>`;
+   <p class="small muted">Tap “This is me” on your own name, on each phone or computer you use, so the draft shows when you’re up. Then give your team a name.</p></section>`;
   const evs=eventList().map(e=>{const on=!!S.cfg.events?.[e.id]?.active,drafted=S.picks.some(p=>p.sport===e.id);
     return `<div class="ev"><span><strong>${esc(e.name)}</strong><br><span class="small muted">${esc(e.when)}</span></span><span class="row">
      ${on?`<label class="field"><span class="label">Weight</span><select id="evw-${e.id}" data-evw="${e.id}"${ro}>${[0.5,1,1.5,2].map(w=>`<option value="${w}"${evWeight(e.id)===w?' selected':''}>${w}×</option>`).join('')}</select></label>`:''}
@@ -692,8 +700,8 @@ $('#view').addEventListener('click',async e=>{
   if(ds.claim||ds.unclaim){/* anyone can claim their own name */}
   else if(!ds.pick&&ds.act!=='confirmPick'&&ds.act!=='cancelPick'&&!ds.psport&&!isCommish)return;
   if(ds.move){const [i,dir]=ds.move.split(':').map(Number);const o=draftOrder();[o[i],o[i+dir]]=[o[i+dir],o[i]];return setDraft({...D(),status:'setup',order:o})}
-  if(ds.claim){const m=S.members.find(x=>x.id===ds.claim);m.uid=me;render();try{await db.doc('members/'+m.id).set({name:m.name,order:m.order,uid:me})}catch(err){fail(err)}return}
-  if(ds.unclaim){const m=S.members.find(x=>x.id===ds.unclaim);delete m.uid;render();try{await db.doc('members/'+m.id).set({name:m.name,order:m.order})}catch(err){fail(err)}return}
+  if(ds.claim){const m=S.members.find(x=>x.id===ds.claim);m.uid=me;render();try{await db.doc('members/'+m.id).set((({id,...r})=>r)(m))}catch(err){fail(err)}return}
+  if(ds.unclaim){const m=S.members.find(x=>x.id===ds.unclaim);delete m.uid;render();try{await db.doc('members/'+m.id).set((({id,...r})=>r)(m))}catch(err){fail(err)}return}
   if(ds.del){confirmKey='del:'+ds.del;render();return}
   if(ds.evdraft){confirmKey='ev:'+ds.evdraft;evOrder=evOrderFor('reverse');render();return}
   if(ds.evorder){evOrder=evOrderFor(ds.evorder);render();return}
@@ -754,13 +762,15 @@ function onField(e){const t=e.target;if(!isCommish)return;
   if(t.dataset.showproj!==undefined){S.cfg.showProj=t.checked;saveCfg();render();return}
   if(t.dataset.done){S.cfg.done={...S.cfg.done,[t.dataset.done]:t.checked};saveCfg();render();return}
   if(t.dataset.evw){S.cfg.events={...S.cfg.events,[t.dataset.evw]:{...S.cfg.events[t.dataset.evw],weight:Number(t.value)}};saveCfg();render();return}
-  if(t.dataset.res!==undefined){saveResult(scoreSport,t.dataset.res,r=>{r[t.dataset.k]=t.value===''?'':Number(t.value)});if(t.tagName==='SELECT')render();return}
+  if(t.dataset.res!==undefined){saveResult(scoreSport,t.dataset.res,r=>{r[t.dataset.k]=t.type==='checkbox'?t.checked:t.value===''?'':Number(t.value)});if(t.type==='checkbox'){render();return}if(t.tagName==='SELECT')render();return}
   if(t.dataset.golf!==undefined){saveResult('golf',t.dataset.golf,r=>{const a=[...(r.pos||['','','',''])];a[+t.dataset.i]=t.value.trim();r.pos=a});return}
   if(t.dataset.avp!==undefined){saveResult(scoreSport,t.dataset.avp,r=>{r.res={...(r.res||{}),[t.dataset.ev]:t.value}});render();return}
   if(t.dataset.tennis!==undefined){saveResult('tennis',t.dataset.tennis,r=>{const a=[...(r.res||['','','',''])];a[+t.dataset.i]=t.value;r.res=a});render()}
 }
 $('#view').addEventListener('input',e=>{if(e.target.tagName==='INPUT'&&e.target.type!=='checkbox')onField(e)});
-$('#view').addEventListener('change',e=>{
+$('#view').addEventListener('change',async e=>{
+  if(e.target.dataset.teamname!==undefined){const m=S.members.find(x=>x.id===e.target.dataset.teamname);if(!m||!(isCommish||m.uid===me))return;
+    m.team=e.target.value.trim().slice(0,40);const {id,...rest}=m;try{await db.doc('members/'+id).set(rest);toast(m.team?'Team name saved.':'Team name cleared.')}catch(err){fail(err)}render();return}
   if(e.target.dataset.draftsort!==undefined){draftSort=e.target.value;try{localStorage.setItem('gg-sort',draftSort)}catch(_){}render();return}
   if(e.target.tagName==='SELECT'||e.target.type==='checkbox')onField(e)});
 
