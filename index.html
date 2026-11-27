@@ -162,6 +162,11 @@ textarea{font:inherit;color:var(--cream);background:var(--panel2);border:1px sol
 .sg-dots span.on{border-color:var(--amber);color:var(--cream)}.sg-dots span.done{background:var(--panel2);color:var(--cream)}
 .sg-btns{display:flex;justify-content:center;margin-top:6px}
 .sg-hold{min-width:220px;padding:14px 18px;font-size:17px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.mside{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0}
+.mside+.mside{border-top:1px solid var(--rule)}
+.mnames{display:flex;flex-direction:column;gap:3px;min-width:0}
+.mname{display:flex;align-items:center;flex-wrap:wrap;gap:5px;font-size:14px}
+.mside.won .mname>span:not(.owner),.mside.won .gscore{font-weight:700;color:var(--cream)}
 .gstake{font-size:12px;color:var(--muted);margin-top:6px;padding-top:6px;border-top:1px dashed var(--rule)}.gstake strong{color:var(--amber)}
 .rough{color:var(--amber);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
 .tl-line.end span{color:var(--amber);font-weight:700}
@@ -371,6 +376,7 @@ const eventList=()=>[...EVENTS.filter(e=>evYearOK(e,viewSeason)),...(S.cfg.custo
   return {...c,short:c.short||c.name.replace(/\s*'?\d{2,4}$/,'').slice(0,12),when:c.when||'Custom event',ladder:t.ladder,...(t.perWin?{perWin:t.perWin}:{}),...(t.pickLabel?{pickLabel:t.pickLabel}:{}),pool:c.pool?.length?c.pool:undefined,custom:true}})];
 const activeEvents=()=>eventList().filter(e=>S.cfg.events?.[e.id]?.active);
 const defOf=id=>id==='flex'?FLEX:SPORTS.find(s=>s.id===id)||{...eventList().find(e=>e.id===id),kind:'event'};
+const evOn=id=>!!S.cfg.events?.[id]?.active;
 const evWeight=id=>{const w=Number(S.cfg.events?.[id]?.weight);return w>0?w:1};
 const FLEX={id:'flex',name:'Flex',short:'Flex',kind:'flex'};
 const activeSports=()=>SPORTS.filter(x=>S.cfg.sportsOn?.[x.id]);
@@ -568,7 +574,33 @@ async function loadGames(){if(gamesLoading)return;gamesLoading=true;
       if(!r.ok)throw 0;G[sp]={key,events:parseEvents(await r.json()),at:Date.now(),live:true}}
     catch(_){const f=S.meta.scoreboard?.[sp];G[sp]=f&&f.date===key?{key,events:f.events||[],at:Date.parse(S.meta.scoreboard.at||'')||0,live:false}:{key,events:[],at:0,live:false,failed:true}}}));
   gamesLoading=false;if(tab==='games')render()}
-function viewGames(){
+/* ===== Match-play events (Mosconi Cup): schedule and results pasted by the commissioner =====
+   One match per line:  Day | Type | Side A players | Side B players | Score (A–B, optional)
+   Side A is the first team (USA), side B the second (Europe). Wins fill in each drafted player's match wins. */
+const SCHED_SIDES={mc26:['USA','Europe']};
+function parseSched(text){return String(text||'').split('\n').map(l=>l.trim()).filter(l=>l&&!l.startsWith('#')).map(l=>{const f=l.split('|').map(x=>x.trim());
+  const sc=(f[4]||'').match(/(\d+)\s*[-–:]\s*(\d+)/),a=sc?+sc[1]:null,b=sc?+sc[2]:null;
+  return {day:f[0]||'',type:f[1]||'',A:(f[2]||'').split(/,|\//).map(x=>x.trim()).filter(Boolean),B:(f[3]||'').split(/,|\//).map(x=>x.trim()).filter(Boolean),a,b,win:a==null||a===b?null:a>b?'A':'B'}}).filter(m=>m.A.length||m.B.length)}
+const schedOf=id=>parseSched(S.cfg.sched?.[id]);
+function schedTally(id){const ms=schedOf(id),wins={},tm={A:0,B:0};
+  for(const m of ms){if(!m.win)continue;tm[m.win]++;for(const n of m[m.win])wins[slug(n)]=(wins[slug(n)]||0)+1}
+  return {ms,wins,tm}}
+// Fill drafted players' match wins (and the Cup winner, first team to 11) from the pasted results.
+function applySchedResults(id){const def=defOf(id);if(!def?.perWin)return;const {ms,wins,tm}=schedTally(id),sideOf={};
+  ms.forEach(m=>{m.A.forEach(n=>sideOf[slug(n)]='A');m.B.forEach(n=>sideOf[slug(n)]='B')});
+  const champ=tm.A>=11?'A':tm.B>=11?'B':null;
+  for(const p of S.picks.filter(x=>x.sport===id)){const k=slug(p.team),w=wins[k]||0,cur=S.results[rid(id,p.team)]||{};
+    const teamWon=champ?sideOf[k]===champ:!!cur.teamWon;if((+cur.w||0)!==w||!!cur.teamWon!==teamWon)saveResult(id,p.team,r=>{r.w=w;r.teamWon=teamWon})}}
+function schedPanel(def){const {ms,tm}=schedTally(def.id);if(!ms.length)return '';const [nA,nB]=SCHED_SIDES[def.id]||['Team A','Team B'];
+  const today=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/Chicago'});
+  const days=[...new Set(ms.map(m=>m.day))];const P0=def.perWin.win*evWeight(def.id),P=Number.isInteger(P0)?String(P0):f1(P0);
+  const side=(names,won,score)=>`<div class="mside${won?' won':''}"><div class="mnames">${names.map(n=>{const o=ownersOf(def.id,n);return `<div class="mname">${logoImg(def.id,n,'sm')}<span>${esc(n)}</span>${o.map(m=>`<span class="owner">${esc(teamOf(m,m._season)||m.name)}${m._tag||''}</span>`).join('')}</div>`}).join('')}</div><span class="gscore num">${score??''}</span></div>`;
+  return `<section class="panel"><div class="cardhead"><h2>${esc(def.name)}</h2><span class="num"><strong>${esc(nA)} ${tm.A}</strong> – <strong>${tm.B} ${esc(nB)}</strong></span></div>
+   <p class="small muted">First to 11 wins the Cup. Each match a drafted player wins is worth ${P}; doubles and team matches count for every player on the winning side.</p>
+   ${days.map(d=>`<div class="label" style="margin-top:10px">${esc(d)}${d.includes(today)?' · today':''}</div><div class="games">${ms.filter(m=>m.day===d).map(m=>{const ours=[...m.A,...m.B].some(n=>ownersOf(def.id,n).length);
+     return `<div class="game${ours?' ours':''}"><div class="gstatus">${esc(m.type||'Match')}${m.win?` · ${esc(m.win==='A'?nA:nB)} wins`:' · to play'}</div>${side(m.A,m.win==='A',m.a)}${side(m.B,m.win==='B',m.b)}${ours&&!m.win?`<div class="gstake">Up for grabs: <strong>${P}</strong> to each drafted winner</div>`:''}</div>`}).join('')}</div>`).join('')}</section>`}
+function viewGames(){return SPORTS.concat(eventList()).filter(d=>d.perWin&&S.cfg.sched?.[d.id]&&(evOn(d.id)||S.picks.some(p=>p.sport===d.id))).map(schedPanel).join('')+viewGamesInner()}
+function viewGamesInner(){
   const day=new Date();day.setDate(day.getDate()+gamesDay);const key=ymdLocal(day);
   if(!Object.values(G).some(g=>g.key===key)){loadGames()}
   clearInterval(gamesTimer);gamesTimer=setInterval(()=>{if(tab==='games'&&!document.hidden)loadGames()},60000);
@@ -797,8 +829,14 @@ function viewScores(){
   const doneCtl=auto&&isCommish?`<label class="row small" style="align-items:center;gap:8px"><input type="checkbox" id="done-${def.id}" data-done="${def.id}"${isDone(def.id)?' checked':''}${ro}> Regular season is over (locks in ${def.kind==='team'?'the best-record bonus and wooden spoon':'final-position bonuses and penalties'})</label>`:'';
   return `${chips}<section class="panel"><div class="cardhead"><h2>${esc(def.name)}</h2>${auto?`<span class="tag ${isDone(def.id)?'done':'live'}">${isDone(def.id)?'Season over':'Auto-updating'}</span>`:def.when?`<span class="small muted">${esc(def.when)}</span>`:''}</div>
    <p class="small muted">${def.kind==='avp'?'Choose which tournaments count this season, then enter each pair’s finish.':def.kind==='event'?'The commissioner sets each country’s result as the event plays out.':'Updates automatically every hour'+(def.kind==='team'?', including playoff rounds':def.kind==='golf'?' once each major finishes':def.kind==='tennis'?' as each Slam plays out':'')+'.'}${isCommish?' As commissioner you can correct anything here; a corrected result stays put until you change it again.':''}</p>
-   ${doneCtl}${body}</section>`;
+   ${doneCtl}${body}</section>${def.perWin?schedEditor(def):''}`;
 }
+function schedEditor(def){const [nA,nB]=SCHED_SIDES[def.id]||['Team A','Team B'];
+  if(!isCommish)return S.cfg.sched?.[def.id]?`<p class="small muted">The full schedule and results are on the Games tab.</p>`:'';
+  return `<section class="panel"><h3>Schedule and results</h3>
+   <p class="small muted">One match per line: <code>Day | Type | ${esc(nA)} players | ${esc(nB)} players | Score</code>. Separate partners with commas; add the score (${esc(nA)} first, e.g. 5-3) when a match finishes. Saving fills in each drafted player’s match wins and, once a team reaches 11, who won the Cup. MVP stays a tick box above. It shows on the Games tab.</p>
+   <textarea id="schedText" style="min-height:180px;font-family:var(--f-mono);font-size:13px">${esc(S.cfg.sched?.[def.id]||'')}</textarea>
+   <div class="row"><button class="btn" data-act="saveSched" data-id="${def.id}">Save schedule</button></div></section>`}
 function swapOptions(def){const tk=takenMap(def.id);
   if(def.teams)return teamList(def).filter(t=>!tk[slug(t)]).sort((a,b)=>showProj()?(projPts(def,b)??0)-(projPts(def,a)??0):0);
   return poolOf(def).filter(x=>!tk[slug(x)])}
@@ -938,7 +976,7 @@ function viewLeague(){
   const sportsPanel=`<section class="panel"><h2>Sports this season</h2><p class="small muted">Choose which sports are in this season’s draft. ${lock?'The draft has started, so these are locked.':'Set these before you start the draft.'}</p>
    <div class="chips">${SPORTS.map(x=>`<button class="chip" data-sporton="${x.id}" aria-pressed="${!!S.cfg.sportsOn?.[x.id]}"${lock||!isCommish?' disabled':''}>${esc(x.short)}</button>`).join('')}</div></section>`;
   return acct+members+sportsPanel+`
-  <section class="panel"><h2>Special events</h2><p class="muted small">Turn on the big tournaments that land in your league year. Each person drafts one country or team, scored on the playoff scale (a title is worth ${ladder(5)}). Events added after the main draft get their own mini draft.</p>
+  <section class="panel"><h2>Special events</h2><p class="muted small">Turn on the big tournaments that land in your league year. Each person drafts one country, team or player. Tournaments are scored on the playoff scale (a title is worth ${ladder(5)}); match-win events like the Mosconi Cup score per match won (see the Rulebook). Events added after the main draft get their own mini draft.</p>
    <div>${evs}</div>
    ${isCommish?`<form class="evform" id="addEvent"><div class="label">Add an event</div>
      <div class="row"><label class="field"><span class="label">Format</span><select id="evTpl">${Object.entries(EV_TPL).map(([k,t])=>`<option value="${k}">${esc(t.label)}</option>`).join('')}</select></label>
@@ -954,6 +992,8 @@ function viewLeague(){
     <dt>Tennis</dt><dd>2 men × the Slams in the season. ${f1(TENNIS_WIN)} per match won, +${B('slamWin')} per Slam title, +${B('slamFinal')} per final lost. Not playing earns nothing.</dd>
     <dt>AVP</dt><dd>One men’s pair and one women’s pair for the season, scored at each tournament the league picks: 1st 10, 2nd 6, 3rd 4, 5th 3, 7th–9th 1.</dd>
     <dt>Flex</dt><dd>One extra pick from any sport in the season (not AVP), scored on its own like any other pick.</dd>
+    <dt>Special events</dt><dd>Each person drafts one country, team or player per event, in a separate mini draft. Tournaments (World Cups, Olympics, March Madness and the like) use the playoff scale: a title is worth ${ladder(5)}, losing the final ${ladder(4)}, and so on down to ${ladder(0)||0} for going out early.${eventList().filter(e=>evOn(e.id)&&evWeight(e.id)!==1).map(e=>` ${esc(e.name)} counts ×${evWeight(e.id)}.`).join('')}</dd>
+    ${eventList().filter(e=>e.perWin&&(evOn(e.id)||S.picks.some(p=>p.sport===e.id))).map(e=>{const P=e.perWin,w=evWeight(e.id),x=v=>Number.isInteger(v*w)?String(v*w):f1(v*w);return `<dt>${esc(e.name)}</dt><dd>Pick one player. ${x(P.win)} for every match he wins (singles, doubles or team matches all count), +${x(P.team)} if his team wins the Cup, and +${x(P.mvp)} if he’s named MVP. A player who doesn’t play a match earns nothing for it. Best case: win every match, win the Cup and take MVP. The commissioner enters the results on the Scores tab.</dd>`}).join('')}
     <dt>Wooden spoon</dt><dd>−${B('spoon')} for the worst regular-season record in each league, each relegated Premier League club, and the last-place F1 driver.</dd>
     <dt>Playoffs</dt><dd>+${B('makeIt')} to make it, +${B('perRound')} per round won (a bye counts as a win), +${B('champ')} more for the title. Champion = ${ladder(5)}, runner-up = ${ladder(4)}.</dd>
     <dt>Best record</dt><dd>+${B('best')} for the best regular-season record in the league (split ties all get it). In the Premier League and F1 that’s the champion.</dd>
@@ -1145,6 +1185,7 @@ $('#view').addEventListener('click',async e=>{
   if(ds.avpdel){S.cfg.avpEvents=(S.cfg.avpEvents||[]).filter(e=>e.id!==ds.avpdel);saveCfg();render();return}
   if(ds.evedit){evEdit=evEdit===ds.evedit?null:ds.evedit;render();return}
   if(ds.evremove){S.cfg.customEvents=(S.cfg.customEvents||[]).filter(c=>c.id!==ds.evremove);const ev={...S.cfg.events};delete ev[ds.evremove];S.cfg.events=ev;saveCfg();render();return}
+  if(ds.act==='saveSched'){const id=ds.id;S.cfg.sched={...(S.cfg.sched||{}),[id]:$('#schedText').value};saveCfg();applySchedResults(id);render();toast('Schedule saved.');return}
   if(ds.act==='saveEv'){const id=ds.id,pool=$('#evEditPool').value.split('\n').map(x=>x.trim()).filter(Boolean);
     S.cfg.customEvents=(S.cfg.customEvents||[]).map(c=>c.id===id?{...c,name:$('#evEditName').value.trim()||c.name,when:$('#evEditWhen').value.trim(),pool}:c);evEdit=null;saveCfg();render();toast('Event saved.');return}
   if(ds.evtoggle){const id=ds.evtoggle,cur=S.cfg.events?.[id];S.cfg.events={...S.cfg.events,[id]:{active:!cur?.active,weight:cur?.weight||1}};saveCfg();render();return}
