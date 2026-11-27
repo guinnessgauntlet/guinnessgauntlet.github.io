@@ -155,6 +155,13 @@ textarea{font:inherit;color:var(--cream);background:var(--panel2);border:1px sol
 .ctip b{display:block}.ctip span{color:var(--muted);font-size:12px}
 .chart.hovering .sline:not(.hot){opacity:.15}
 .chart.hovering .sline.hot{opacity:1}
+.sg{padding-top:8px}
+.sg-cv{width:100%;max-width:480px;aspect-ratio:480/504;display:block;margin:0 auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:pointer}
+.sg-dots{display:flex;gap:6px;margin:8px 0}
+.sg-dots span{min-width:34px;height:28px;border:1px solid var(--rule);border-radius:6px;display:grid;place-items:center;font-family:var(--f-mono);font-size:13px;color:var(--muted)}
+.sg-dots span.on{border-color:var(--amber);color:var(--cream)}.sg-dots span.done{background:var(--panel2);color:var(--cream)}
+.sg-btns{display:flex;justify-content:center;margin-top:6px}
+.sg-hold{min-width:220px;padding:14px 18px;font-size:17px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .rough{color:var(--amber);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
 .tl-line.end span{color:var(--amber);font-weight:700}
 .tl-line.today span{color:var(--cream);font-weight:700}
@@ -210,6 +217,7 @@ textarea{font:inherit;color:var(--cream);background:var(--panel2);border:1px sol
   <button id="tab-draft" role="tab" data-tab="draft" aria-selected="false">Draft</button>
   <button id="tab-scores" role="tab" data-tab="scores" aria-selected="false">Scores</button>
   <button id="tab-stats" role="tab" data-tab="stats" aria-selected="false">Stats</button>
+  <button id="tab-splitg" role="tab" data-tab="splitg" aria-selected="false">Split the G</button>
   <button id="tab-league" role="tab" data-tab="league" aria-selected="false">League</button>
 </div></nav>
 <main class="in" id="view"><div class="notice">Loading the league…</div></main>
@@ -476,7 +484,8 @@ function render(){
   const others=liveSeasons().filter(k=>k!==viewSeason);
   const banner=others.length?`<div class="notice" style="color:var(--cream)">${others.map(k=>k<viewSeason?`Season ${k} is still finishing (it ends around ${fmtDay(seasonEnd(k))}). <button class="btn ghost small" data-season="${k}">View season ${k}</button>`:`Season ${k} has started. <button class="btn ghost small" data-season="${k}">View season ${k}</button>`).join(' ')}</div>`:'';
   document.querySelectorAll('.ctip').forEach(x=>x.remove());
-  $('#view').innerHTML=(tab==='games'?'':banner)+({standings:viewStandings,games:viewGames,draft:viewDraft,scores:viewScores,stats:viewStats,league:viewLeague}[tab])();
+  $('#view').innerHTML=(tab==='games'||tab==='splitg'?'':banner)+({standings:viewStandings,games:viewGames,draft:viewDraft,scores:viewScores,stats:viewStats,splitg:viewSplitG,league:viewLeague}[tab])();
+  if(tab==='splitg')mountSplitG();
   tick();
   setTimeout(saveSnapshots,0);
 }
@@ -1205,10 +1214,107 @@ $('#view').addEventListener('change',async e=>{
     const svg=g.closest('.chart');document.querySelectorAll('.sline.hot').forEach(x=>{if(x!==g)x.classList.remove('hot')});g.classList.add('hot');svg.classList.add('hovering')});
   $('#view').addEventListener('pointerleave',hide);document.addEventListener('scroll',hide,{passive:true});
 })();
+/* ================= Split the G: side-view pint game =================
+   Hold to tip the glass toward your mouth (counter-clockwise, pivoting on the rim), let go to set it down.
+   The surface stays level, so the stout pours over the rim once it reaches it. Stop with the line through the middle of the G. */
+const SG_LEVELS=[
+ {name:'The pint',note:'A proper tulip pint. Warm-up.',H:270,prof:[[0,37],[30,41],[150,51],[205,59],[240,57],[270,53]],g:158,flow:.14},
+ {name:'Nonic',note:'Straight sides, bulge near the top.',H:262,prof:[[0,34],[195,51],[222,57],[240,56],[262,54]],g:166,flow:.15},
+ {name:'Half pint',note:'Small glass, small margin.',H:190,prof:[[0,31],[150,43],[190,45]],g:96,flow:.17},
+ {name:'Pilsner',note:'Tall and narrow. The level moves fast.',H:300,prof:[[0,20],[40,22],[300,45]],g:150,flow:.18},
+ {name:'Chalice',note:'Wide bowl on a stem. Easy to overpour.',H:262,prof:[[108,6],[125,36],[160,57],[210,63],[262,61]],g:196,flow:.20,stem:1},
+ {name:'Stein',note:'Wide and straight. Every millimetre counts.',H:216,prof:[[0,58],[216,58]],g:116,flow:.22,handle:1}];
+const SG={lvl:0,scores:[],state:'ready',ang:0,vel:0,hold:false,V:0,V0:0,settle:0,res:null,el:null,cv:null,raf:0,last:0,glug:0};
+const sgPoly=L=>{const r=L.prof.map(([y,w])=>[w,y]),l=L.prof.map(([y,w])=>[-w,y]).reverse();return [...r,...l]};
+const sgArea=p=>{let a=0;for(let i=0;i<p.length;i++){const [x1,y1]=p[i],[x2,y2]=p[(i+1)%p.length];a+=x1*y2-x2*y1}return Math.abs(a)/2};
+function sgClip(p,h,below=true){const out=[],ins=q=>below?q[1]<=h:q[1]>=h;
+  for(let i=0;i<p.length;i++){const a=p[i],b=p[(i+1)%p.length],ia=ins(a),ib=ins(b);
+    if(ia)out.push(a);if(ia!==ib){const t=(h-a[1])/(b[1]-a[1]);out.push([a[0]+t*(b[0]-a[0]),h])}}return out}
+const sgRot=(p,th)=>{const c=Math.cos(th),s=Math.sin(th);return p.map(([x,y])=>[x*c-y*s,x*s+y*c])};
+// Glass interior rotated about the left rim point (the drinker's lip), in coordinates with the pivot at 0,0 and y up.
+function sgWorld(L,th){const top=L.prof.at(-1),px=-top[1],py=L.H;return sgRot(sgPoly(L).map(([x,y])=>[x-px,y-py]),th)}
+function sgLevelAt(poly,V){let lo=Math.min(...poly.map(q=>q[1])),hi=Math.max(...poly.map(q=>q[1]));for(let i=0;i<40;i++){const m=(lo+hi)/2;sgArea(sgClip(poly,m))<V?lo=m:hi=m}return (lo+hi)/2}
+function sgStart(lvl){const L=SG_LEVELS[lvl];SG.lvl=lvl;SG.ang=0;SG.vel=0;SG.hold=false;SG.state='ready';SG.res=null;SG.settle=0;
+  SG.V0=sgArea(sgClip(sgPoly(L),L.H-7));SG.V=SG.V0;sgPanel();sgDraw()}
+const sgFoam=(top,bottom)=>Math.min(12,(top-bottom)*.35);
+function sgScore(){const L=SG_LEVELS[SG.lvl],lvlY=sgLevelAt(sgPoly(L),SG.V),err=lvlY-L.g,mm=err/L.H*150;
+  const a=Math.abs(mm),pts=a<=1.5?100:Math.max(0,Math.round(100-(a-1.5)*5));
+  SG.res={mm,pts,split:a<=1.5};SG.scores[SG.lvl]=pts;SG.state='scored';sgPanel();if(SG.lvl===SG_LEVELS.length-1)sgFinish()}
+async function sgFinish(){const total=SG.scores.reduce((a,b)=>a+(b||0),0),m=myMember();SG.state='done';sgPanel();
+  if(!m||!db)return;const cur=S.splitg?.[m.id]||{},doc={best:Math.max(cur.best||0,total),last:total,runs:(cur.runs||0)+1,at:new Date().toISOString(),season:viewSeason};
+  try{await db.doc('splitg/'+m.id).set(doc);S.splitg={...(S.splitg||{}),[m.id]:doc};render();if(total>(cur.best||0))toast(`New personal best: ${total}`)}
+  catch(err){toast('Score not saved. The database rules need the Split the G line added.')}}
+function sgStep(t){if(!SG.el?.isConnected){SG.raf=0;return}const dt=Math.min(.05,(t-(SG.last||t))/1000);SG.last=t;
+  const L=SG_LEVELS[SG.lvl];
+  if(SG.state==='ready'||SG.state==='drinking'){
+    const D=Math.PI/180;SG.vel+=(SG.hold?60:-160)*D*dt;SG.vel=Math.max(-80*D,Math.min(35*D,SG.vel));SG.ang+=SG.vel*dt;
+    if(SG.ang<=0){SG.ang=0;SG.vel=0}if(SG.ang>130*D){SG.ang=130*D;SG.vel=0}
+    const poly=sgWorld(L,SG.ang),rim=[poly[L.prof.length-1],poly[L.prof.length]],lip=Math.min(rim[0][1],rim[1][1]),cap=sgArea(sgClip(poly,lip));
+    SG.glug=0;if(SG.V>cap){const out=Math.min((SG.V-cap)*(1-Math.exp(-dt*2)),SG.V0*L.flow*dt);SG.V-=out;SG.glug=out/dt;SG.state='drinking'}
+    if(SG.state==='drinking'&&!SG.hold&&SG.ang===0){SG.settle+=dt;if(SG.settle>.5)sgScore()}else SG.settle=0;
+    if(SG.V<SG.V0*0.02&&SG.state==='drinking'&&!SG.hold&&SG.ang===0)sgScore()}
+  sgDraw();SG.raf=requestAnimationFrame(sgStep)}
+function sgDraw(){const cv=SG.cv;if(!cv)return;const L=SG_LEVELS[SG.lvl],dpr=window.devicePixelRatio||1,W=cv.clientWidth||480,Hc=W*1.05;
+  if(cv.width!==Math.round(W*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(Hc*dpr)}
+  const c=cv.getContext('2d'),s=W/480;c.setTransform(dpr*s,0,0,dpr*s,0,0);c.clearRect(0,0,480,504);
+  const PX=150,PY=200,sx=([x,y])=>[PX+x,PY-y];
+  // Drinker's profile (simple silhouette to the left of the lip)
+  c.fillStyle='#2b241e';c.beginPath();c.moveTo(0,10);c.bezierCurveTo(60,10,104,40,112,96);c.quadraticCurveTo(114,118,122,128);
+  c.lineTo(147,164);c.quadraticCurveTo(149,172,140,174);c.lineTo(130,176);c.quadraticCurveTo(146,182,148,192);c.quadraticCurveTo(144,198,138,200);
+  c.quadraticCurveTo(146,204,146,210);c.quadraticCurveTo(140,218,128,220);c.quadraticCurveTo(132,240,124,252);c.quadraticCurveTo(112,266,92,268);
+  c.lineTo(80,330);c.lineTo(84,504);c.lineTo(0,504);c.closePath();c.fill();
+  const poly=sgWorld(L,SG.ang),path=p=>{c.beginPath();p.forEach((q,i)=>{const [x,y]=sx(q);i?c.lineTo(x,y):c.moveTo(x,y)});c.closePath()};
+  const th=SG.ang,loc=(x,y)=>{const top=L.prof.at(-1);return sgRot([[x+top[1],y-L.H]],th)[0]};
+  // Stem / base / handle
+  c.fillStyle='rgba(240,230,207,.10)';c.strokeStyle='rgba(240,230,207,.45)';c.lineWidth=2;
+  const shape=pts=>{path(pts.map(([x,y])=>loc(x,y)));c.fill();c.stroke()};
+  const b0=L.prof[0];
+  if(L.stem){shape([[-5,108],[5,108],[5,22],[-5,22]]);shape([[-44,0],[44,0],[40,10],[8,22],[-8,22],[-40,10]])}
+  else shape([[-b0[1]-3,-12],[b0[1]+3,-12],[b0[1]+1,0],[-b0[1]-1,0]]);
+  if(L.handle){c.lineWidth=9;c.strokeStyle='rgba(240,230,207,.30)';c.beginPath();const pts=[[60,170],[100,165],[104,60],[60,50]].map(([x,y])=>sx(loc(x,y)));c.moveTo(...pts[0]);c.bezierCurveTo(...pts[1],...pts[2],...pts[3]);c.stroke();c.lineWidth=2}
+  // Stout and head
+  const h=sgLevelAt(poly,SG.V);const liq=sgClip(poly,h);
+  if(liq.length>2){path(liq);const lo=Math.min(...liq.map(q=>q[1]));const g=c.createLinearGradient(0,PY-lo,0,PY-h);g.addColorStop(0,'#120a06');g.addColorStop(1,'#2a140b');c.fillStyle=g;c.fill();
+    const head=sgClip(liq,h-sgFoam(h,lo),false);if(head.length>2){path(head);c.fillStyle='#eadcbc';c.fill()}}
+  // Glass wall and glare
+  path(poly);c.strokeStyle='rgba(240,230,207,.6)';c.lineWidth=3;c.stroke();c.fillStyle='rgba(240,230,207,.04)';c.fill();
+  // The G, centred on the target line
+  const [gx,gy]=sx(loc(0,L.g));c.save();c.translate(gx,gy);c.rotate(-th);c.fillStyle='rgba(240,230,207,.82)';c.font='900 44px Georgia, "Times New Roman", serif';c.textAlign='center';c.textBaseline='middle';c.fillText('G',0,2);
+  c.strokeStyle='rgba(217,160,63,.55)';c.setLineDash([4,4]);c.lineWidth=1;const w=(()=>{let y=L.g,p=L.prof,i=p.findIndex(q=>q[0]>=y);if(i<=0)return p[0][1];const [y0,w0]=p[i-1],[y1,w1]=p[i];return w0+(w1-w0)*(y-y0)/(y1-y0)})();
+  c.beginPath();c.moveTo(-w,0);c.lineTo(-24,0);c.moveTo(24,0);c.lineTo(w,0);c.stroke();c.restore();
+  // Glug bubbles at the lip while drinking
+  if(SG.glug>300){c.fillStyle='rgba(234,220,188,.7)';for(let i=0;i<3;i++){c.beginPath();c.arc(PX-6-Math.random()*10,PY-4+Math.random()*10,1.5+Math.random()*2,0,7);c.fill()}}
+  // Result line after settling
+  if(SG.state==='scored'||SG.state==='done'){const r=SG.res;if(r){c.fillStyle=r.split?'#86c493':'#f0e6cf';c.font='900 30px "Big Shoulders Display", Impact, sans-serif';c.textAlign='center';
+    c.fillText(r.split?'SPLIT THE G!':`${Math.abs(r.mm).toFixed(1)} MM ${r.mm>0?'ABOVE':'BELOW'}`,330,60);c.font='700 20px "Barlow", sans-serif';c.fillText(`${r.pts} points`,330,88)}}}
+function sgPanel(){const p=SG.el?.querySelector('.sg-panel');if(!p)return;const L=SG_LEVELS[SG.lvl],total=SG.scores.reduce((a,b)=>a+(b||0),0),n=SG_LEVELS.length;
+  const btn=SG.state==='scored'?`<button class="btn" data-sg="next">Next glass</button>`:SG.state==='done'?`<button class="btn" data-sg="again">Play again</button>`:`<button class="btn sg-hold" data-sg="hold">Hold to drink</button>`;
+  p.innerHTML=`<div class="cardhead"><h3>Glass ${SG.lvl+1} of ${n}: ${esc(L.name)}</h3><span class="num">Total ${total}</span></div>
+   <p class="small muted">${esc(L.note)} Hold to tip the glass, let go to set it down, and stop with the top of the head right through the middle of the G. One gulp per glass.</p>
+   <div class="sg-dots">${SG_LEVELS.map((_,i)=>`<span class="${i<SG.lvl||SG.scores[i]!=null?'done':i===SG.lvl?'on':''}">${SG.scores[i]!=null?SG.scores[i]:i+1}</span>`).join('')}</div>
+   ${SG.state==='done'?`<p><strong>Final: ${total} of ${n*100}.</strong> ${myMember()?'Saved to the leaderboard if it beats your best.':'Tap “This is me” on the League tab to get on the leaderboard.'}</p>`:''}
+   <div class="sg-btns">${btn}</div>`;
+  const hb=p.querySelector('[data-sg="hold"]');if(hb)sgHoldOn(hb)}
+function sgHoldOn(el){const on=e=>{e.preventDefault();if(SG.state==='ready'||SG.state==='drinking'){SG.hold=true}},off=()=>{SG.hold=false};
+  el.addEventListener('pointerdown',on);['pointerup','pointercancel','pointerleave'].forEach(t=>el.addEventListener(t,off));el.addEventListener('contextmenu',e=>e.preventDefault())}
+function sgEl(){if(SG.el)return SG.el;const d=document.createElement('section');d.className='panel sg';
+  d.innerHTML=`<canvas class="sg-cv" aria-label="Pint glass. Hold to drink."></canvas><div class="sg-panel"></div>`;SG.el=d;SG.cv=d.querySelector('canvas');sgHoldOn(SG.cv);
+  d.addEventListener('click',e=>{const b=e.target.closest('[data-sg]');if(!b)return;e.stopPropagation();
+    if(b.dataset.sg==='next')sgStart(SG.lvl+1);if(b.dataset.sg==='again'){SG.scores=[];sgStart(0)}});
+  sgStart(0);return d}
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&tab==='splitg'&&!e.target.closest?.('input,textarea,select')){e.preventDefault();if(SG.state==='ready'||SG.state==='drinking')SG.hold=true}});
+document.addEventListener('keyup',e=>{if(e.code==='Space')SG.hold=false});
+function mountSplitG(){const m=$('#gameMount');if(!m)return;m.replaceWith(sgEl());sgPanel();if(!SG.raf){SG.last=0;SG.raf=requestAnimationFrame(sgStep)}}
+function viewSplitG(){const rows=Object.entries(S.splitg||{}).map(([id,v])=>({m:S.members.find(x=>x.id===id),...v})).filter(r=>r.m).sort((a,b)=>b.best-a.best);
+  return `<div id="gameMount"></div>
+  <section class="panel"><div class="cardhead"><h2>Leaderboard</h2><span class="small muted">Best total over all ${SG_LEVELS.length} glasses</span></div>
+  ${rows.length?`<div class="scroll"><table><tr><th class="l">#</th><th class="l">Name</th><th>Best</th><th>Last</th><th>Runs</th></tr>${rows.map((r,i)=>`<tr><td class="num l">${i+1}</td><td class="l">${whoHtml(r.m.id)}</td><td class="num total">${r.best}</td><td class="num">${r.last??''}</td><td class="num">${r.runs||1}</td></tr>`).join('')}</table></div>`:'<p class="small muted">No scores yet. Be the first.</p>'}
+  <p class="small muted">Each glass scores up to 100: a split (within 1.5 mm of the middle of the G) is 100, and you lose 5 points for every millimetre off after that. Later glasses pour faster.</p></section>`}
+
 /* ================= Live data ================= */
 window.addEventListener('pageshow',e=>{if(e.persisted)location.reload()});
 try{tab=localStorage.getItem('gg-tab')||tab}catch(_){}
-if(!['standings','games','draft','scores','stats','league'].includes(tab))tab='standings';
+if(!['standings','games','draft','scores','stats','splitg','league'].includes(tab))tab='standings';
 let rerenderWaiting=false;
 function rerender(){
   const a=document.activeElement;
@@ -1231,6 +1337,7 @@ function rerender(){
     if(viewSeason>curSeason())viewSeason=curSeason();applySeason();done(s);rerender()},e=>{done();fail(e)});
   db.collection('results').onSnapshot(s=>{loaded.results=true;S.resultsAll={};s.docs.forEach(d=>S.resultsAll[d.id]=structuredClone(d.data()));applySeason();rerender()},fail);
   db.collection('meta').onSnapshot(s=>{S.metaAll={};s.docs.forEach(d=>S.metaAll[d.id]=d.data());applySeason();rerender()},()=>{});
+  db.collection('splitg').onSnapshot(s=>{S.splitg={};s.docs.forEach(d=>S.splitg[d.id]=d.data());if(tab==='splitg')rerender()},()=>{});
   db.collection('history').onSnapshot(s=>{loaded.history=true;S.historyAll={};s.docs.forEach(d=>S.historyAll[d.id]=d.data());applySeason();rerender()},()=>{});
   db.doc('sync/main').onSnapshot(s=>{S.sync=s.exists?s.data():null;rerender()},()=>{});
 })();
