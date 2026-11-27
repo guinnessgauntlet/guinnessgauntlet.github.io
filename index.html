@@ -162,6 +162,7 @@ textarea{font:inherit;color:var(--cream);background:var(--panel2);border:1px sol
 .sg-dots span.on{border-color:var(--amber);color:var(--cream)}.sg-dots span.done{background:var(--panel2);color:var(--cream)}
 .sg-btns{display:flex;justify-content:center;margin-top:6px}
 .sg-hold{min-width:220px;padding:14px 18px;font-size:17px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.gstake{font-size:12px;color:var(--muted);margin-top:6px;padding-top:6px;border-top:1px dashed var(--rule)}.gstake strong{color:var(--amber)}
 .rough{color:var(--amber);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
 .tl-line.end span{color:var(--amber);font-weight:700}
 .tl-line.today span{color:var(--cream);font-weight:700}
@@ -228,20 +229,28 @@ textarea{font:inherit;color:var(--cream);background:var(--panel2);border:1px sol
 /* ================= Firebase adapter ================= */
 const FB='https://www.gstatic.com/firebasejs/10.12.2/';
 let db=null,me=null,email='',isCommish=false,AUTH=null;
+const isPlayer=()=>!!email; // signed in with Google (anonymous visitors can only look)
 async function connect(){
   const cfg=window.GG_FIREBASE;
   if(!cfg||!cfg.apiKey||cfg.apiKey.startsWith('PASTE'))throw Object.assign(new Error('config'),{code:'no-config'});
   const [{initializeApp},F,A]=await Promise.all([import(FB+'firebase-app.js'),import(FB+'firebase-firestore.js'),import(FB+'firebase-auth.js')]);
   const app=initializeApp(cfg),fs=F.getFirestore(app),auth=A.getAuth(app);
-  await new Promise((res,rej)=>{let first=true;A.onAuthStateChanged(auth,u=>{
-    if(!u){A.signInAnonymously(auth).catch(rej);return}
-    me=u.uid;email=(u.email||'').toLowerCase();
-    const done=c=>{isCommish=c;if(first){first=false;res()}else render()};
+  let first=true,res0;
+  const applyUser=u=>{me=u.uid;email=(u.email||u.providerData?.[0]?.email||'').toLowerCase();
+    const done=c=>{isCommish=c;if(first){first=false;res0()}else{markGoogleClaim();render()}};
     if(!email)return done(false);
     crypto.subtle.digest('SHA-256',new TextEncoder().encode(email)).then(h=>{
       const hex=[...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join('');
-      done(hex===String(window.GG_COMMISSIONER_HASH||'').trim().toLowerCase())}).catch(()=>done(false))})});
-  AUTH={signIn:()=>A.signInWithPopup(auth,new A.GoogleAuthProvider()),signOut:()=>A.signOut(auth)};
+      done(hex===String(window.GG_COMMISSIONER_HASH||'').trim().toLowerCase())}).catch(()=>done(false))};
+  await new Promise((res,rej)=>{res0=res;A.onAuthStateChanged(auth,u=>{if(!u){A.signInAnonymously(auth).catch(rej);return}applyUser(u)})});
+  AUTH={
+    // Link this device's visitor account to Google, so an existing "This is me" here keeps working; if that Google
+    // account is already in use (signed in on another device), switch to it instead.
+    signIn:async()=>{const prov=new A.GoogleAuthProvider();prov.setCustomParameters({prompt:'select_account'});const u=auth.currentUser;
+      if(u&&u.isAnonymous){try{const r=await A.linkWithPopup(u,prov);await r.user.getIdToken(true);await r.user.reload();applyUser(auth.currentUser);return}
+        catch(e){const cred=A.GoogleAuthProvider.credentialFromError(e);if(e.code==='auth/credential-already-in-use'&&cred){await A.signInWithCredential(auth,cred);return}throw e}}
+      await A.signInWithPopup(auth,prov)},
+    signOut:()=>A.signOut(auth)};
   const wrapSnapDoc=s=>({id:s.id,exists:s.exists(),data:()=>s.data(),metadata:s.metadata});
   const wrapD=r=>({id:r.id,get:async()=>wrapSnapDoc(await F.getDoc(r)),set:(d,o)=>o?F.setDoc(r,d,o):F.setDoc(r,d),delete:()=>F.deleteDoc(r),
     onSnapshot:(n,e)=>F.onSnapshot(r,s=>n(wrapSnapDoc(s)),e)});
@@ -465,8 +474,10 @@ function need(mid){const sl=D().slots||{},b=D().base||0,out={},mine=S.picks.filt
   for(const id in sl)out[id]=sl[id]-(id==='flex'?mine.filter(p=>p.flex).length:mine.filter(p=>p.sport===id&&!p.flex).length);return out}
 function takenMap(sport){const m={};S.picks.filter(p=>p.sport===sport).forEach(p=>m[slug(p.team)]=p.member);return m}
 function mainSlots(){const sl={};activeSports().forEach(s=>sl[s.id]=s.count||1);sl.flex=1;activeEvents().forEach(e=>{if(!S.picks.some(p=>p.sport===e.id))sl[e.id]=1});return sl}
+function markGoogleClaim(){if(!db||!isPlayer())return;const m=S.members.find(x=>x.uid===me);if(m&&!m.google){m.google=true;const {id,...r}=m;db.doc('members/'+id).set(r).catch(()=>{})}}
 const repicksOf=m=>Math.max(0,Number(m?.repicks?.[viewSeason])||0);
-const myMember=()=>S.members.find(m=>m.uid&&m.uid===me);
+const isMe=m=>!!m?.uid&&m.uid===me&&(isPlayer()||isCommish);
+const myMember=()=>S.members.find(isMe)||null;
 function canSwap(p){if(D().status==='live')return false;if(isCommish)return true;const m=myMember();return !!m&&p.member===m.id&&repicksOf(m)>0}
 const nextN=()=>S.allPicks.reduce((a,p)=>Math.max(a,p.n+1),0);
 const pid=n=>'p'+String(n).padStart(4,'0');
@@ -571,7 +582,11 @@ function viewGames(){
   const owner=list=>list.length?`<span class="owners">${list.map(m=>`<span class="owner">${esc(teamOf(m,m._season||viewSeason)||m.name)}${m._tag||''}</span>`).join('')}</span>`:'';
     const side=(t,o,pre)=>`<div class="gside${t.winner?' won':''}">${t.logo?`<img class="logo" src="${esc(t.logo)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`:'<span class="logo"></span>'}<span class="gname">${esc(t.name)}${owner(o)}</span><span class="gscore num">${pre?'':esc(t.score)}</span></div>`;
     const status=e=>e.state==='pre'?new Date(e.date).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):e.detail;
-    const gameHtml=(e,lg)=>`<div class="game${e.ao.length||e.ho.length?' ours':''}"><div class="gstatus${e.state==='in'?' live':''}">${lg?`<span class="glg">${esc(lg)}</span>`:''}${e.state==='in'?'● ':''}${esc(status(e))}${e.note?` · ${esc(e.note)}`:''}</div>${side(e.away,e.ao,e.state==='pre')}${side(e.home,e.ho,e.state==='pre')}</div>`;
+    const stake=e=>{if(!e.ao.length&&!e.ho.length)return '';const sp=e.c||defOf(e.sp);if(!sp||!SEASON_GAMES[sp.id])return '';
+      if(isDone(sp.id))return `<div class="gstake">Playoffs: +${B('perRound')} for each round won, +${B('champ')} more for the title</div>`;
+      const w=162/SEASON_GAMES[sp.id],extra=sp.id==='epl'?` · draw ${f1(w/3)} each`:sp.id==='nhl'?` · OT/SO loss ${f1(w/2)}`:sp.id==='nfl'?` · tie ${f1(w/2)} each`:'';
+      return `<div class="gstake">Up for grabs: <strong>${f1(w)}</strong> to the winner${extra}</div>`};
+    const gameHtml=(e,lg)=>`<div class="game${e.ao.length||e.ho.length?' ours':''}"><div class="gstatus${e.state==='in'?' live':''}">${lg?`<span class="glg">${esc(lg)}</span>`:''}${e.state==='in'?'● ':''}${esc(status(e))}${e.note?` · ${esc(e.note)}`:''}</div>${side(e.away,e.ao,e.state==='pre')}${side(e.home,e.ho,e.state==='pre')}${stake(e)}</div>`;
     const lists=sports.map(c=>{const g=G[c.id];if(!g||g.key!==key)return {c,loading:true};
       let evs=g.events.map(e=>({...e,c,ao:ownersOf(c.id,e.away.name),ho:ownersOf(c.id,e.home.name)}));const total=evs.length;
       if(onlyOurs)evs=evs.filter(e=>e.ao.length||e.ho.length);return {c,g,evs,total}});
@@ -622,7 +637,7 @@ function viewStandings(){
     const d=b-ranks[id],gain=r.total-(t||0);return `<td class="num move" title="Since ${esc(base.label)}">${d>0?`<span class="up">▲${d}</span>`:d<0?`<span class="down">▼${-d}</span>`:'<span class="muted">—</span>'}<span class="gain">${gain>=0?'+':''}${f1(gain)}</span></td>`};
   const body=rows.map((r,i)=>{if(r.total!==prev){rank=i+1;prev=r.total}
     const isOpen=openRow===r.m.id;
-    return `<tr class="click ${rank===1?'lead':''}" data-open="${r.m.id}" aria-expanded="${isOpen}"><td class="num l">${rank}</td><td class="l">${whoHtml(r.m.id)}${r.m.uid&&r.m.uid===me?' <span class="you">You</span>':''}</td>${cols.map(c=>`<td class="num">${f1(r.by[c.id].pts)}</td>`).join('')}<td class="num total">${f1(r.total)}</td>${move(r.m.id)}</tr>`
+    return `<tr class="click ${rank===1?'lead':''}" data-open="${r.m.id}" aria-expanded="${isOpen}"><td class="num l">${rank}</td><td class="l">${whoHtml(r.m.id)}${isMe(r.m)?' <span class="you">You</span>':''}</td>${cols.map(c=>`<td class="num">${f1(r.by[c.id].pts)}</td>`).join('')}<td class="num total">${f1(r.total)}</td>${move(r.m.id)}</tr>`
       +(isOpen?`<tr class="detail"><td colspan="${cols.length+4}">${breakdown(r,cols)}</td></tr>`:'')}).join('');
   const lead=rows[0],pints=S.members.length-1;
   const leaders=cols.map(c=>{const best=rows.map(r=>({r,v:r.by[c.id].pts})).sort((a,b)=>b.v-a.v)[0];return best&&best.v>0?`<div><span>${esc(c.short)}</span><span>${esc(best.r.m.name)} <span class="num muted">${f1(best.v)}</span></span></div>`:''}).join('');
@@ -685,7 +700,7 @@ function viewDraft(){
        ${Object.keys(tk).length?`<p class="small muted">Taken: ${S.picks.filter(p=>p.sport===def.id).map(p=>esc(p.team)+' ('+esc(mname(p.member))+')').join(', ')}</p>`:''}`}
     const nextUp=[1,2].map(k=>i+k<total?esc(mname(onClock(i+k))):null).filter(Boolean);
     top=`<div class="clock"><div class="clockrow"><div><span class="label" style="color:inherit;opacity:.7">On the clock · Pick ${i+1} of ${total} · Round ${Math.floor(i/N)+1}</span>
-      <div class="who">${esc(mine?.name||'?')} ${mine?.uid&&mine.uid===me?'<span class="you">You</span>':''}</div>${teamOf(mine)?`<div class="meta">${esc(teamOf(mine))}</div>`:''}
+      <div class="who">${esc(mine?.name||'?')} ${isMe(mine)?'<span class="you">You</span>':''}</div>${teamOf(mine)?`<div class="meta">${esc(teamOf(mine))}</div>`:''}
       <div class="meta">${nextUp.length?'Then: '+nextUp.join(', '):'Last pick of the draft'}</div></div>
       ${d.pickSeconds?`<div class="timer" id="timer">${PINT}<div><div class="tleft" id="tLeft">${Number(d.pickSeconds).toFixed(1)}</div><div class="tsub" id="tSub">seconds</div></div></div>`:''}</div>
       ${isCommish?`<div class="tctl"><button class="btn ghost small" data-act="autoPick">Auto-pick for ${esc(mine?.name||'them')}</button><button class="btn ghost small" data-act="autoAll">${autoRunning?'Stop auto-draft':'Auto-draft the rest'}</button></div>`:''}
@@ -729,8 +744,8 @@ function viewDraft(){
     ${S.picks.length&&d.status!=='live'&&(isCommish||repicksOf(myMember())>0)?`<p class="small muted">${isCommish?'Tap any pick to replace it with an undrafted option.':'Tap one of your picks to use your re-pick.'}</p>`:''}
     ${picks.length?`<div class="label">Latest picks</div><div class="list">${picks.slice(-5).reverse().map(p=>`<div><span><span class="num muted">#${p.n-(d.base||0)+1}</span> ${esc(mname(p.member))}</span><span>${esc(p.team)} <span class="muted small">${esc(defOf(p.sport)?.short)}</span></span></div>`).join('')}</div>`:''}
   </section>`+changeLog();
-  const meClaimed=S.members.some(m=>m.uid&&m.uid===me);
-  const myId=S.members.find(m=>m.uid&&m.uid===me)?.id;
+  const meClaimed=S.members.some(isMe);
+  const myId=myMember()?.id;
   if(!needsFor||!S.members.some(m=>m.id===needsFor))needsFor=myId||'';
   const needsPanel=(d.status==='live'||picks.length)&&d.slots&&(needsFor||isCommish)?(()=>{
     const id=needsFor,base=d.base||0,mine=S.picks.filter(p=>p.member===id&&p.n>=base);
@@ -746,7 +761,7 @@ function viewDraft(){
     :d.status==='live'&&!meClaimed?`<p class="small muted">Tap “This is me” on your name (League tab) to get alerts when it’s your pick.</p>`:'';
   const mine=myMember(),rp=repicksOf(mine);
   const repickBar=rp&&d.status!=='live'&&S.picks.some(p=>p.member===mine.id)?`<div class="notice" style="color:var(--cream)">The commissioner gave you ${rp} re-pick${rp===1?'':'s'}. Tap one of your picks in the Rosters table to swap it for any team or player nobody has drafted.</div>`:'';
-  return alertBar+projBar+repickBar+top+needsPanel+board+specials;
+  return signInNote('make picks')+alertBar+projBar+repickBar+top+needsPanel+board+specials;
 }
 function viewScores(){
   const cols=columns(),ro=isCommish?'':' disabled';
@@ -901,10 +916,12 @@ function viewStats(){
     ${historyChart()}</section>`}
 function viewLeague(){
   const ro=isCommish?'':' disabled',lock=S.picks.length>0;
+  const acct=commishPanel();
   const members=`<section class="panel"><h2>The field</h2>
-   ${S.members.length?`<div class="list">${S.members.map(m=>`<div><span>${esc(m.name)} ${m.uid&&m.uid===me?'<span class="you">You</span>':''}${(isCommish||(m.uid&&m.uid===me))?`<br><input id="tn-${m.id}" data-teamname="${m.id}" value="${esc(teamOf(m)||'')}" placeholder="Team name for season ${viewSeason}" maxlength="40" aria-label="Team name for ${esc(m.name)}" style="margin-top:6px;width:min(260px,70vw)">`:teamOf(m)?`<br><span class="small muted">${esc(teamOf(m))}</span>`:''}</span><span class="row">
-     ${!m.uid&&!S.members.some(x=>x.uid===me)?`<button class="btn ghost small" data-claim="${m.id}"${canWrite?'':' disabled'}>This is me</button>`:''}
-     ${m.uid===me?`<button class="btn ghost small" data-unclaim="${m.id}"${canWrite?'':' disabled'}>Not me</button>`:''}
+   ${S.members.length?`<div class="list">${S.members.map(m=>`<div><span>${esc(m.name)} ${isMe(m)?'<span class="you">You</span>':''}${(isCommish||isMe(m))?`<br><input id="tn-${m.id}" data-teamname="${m.id}" value="${esc(teamOf(m)||'')}" placeholder="Team name for season ${viewSeason}" maxlength="40" aria-label="Team name for ${esc(m.name)}" style="margin-top:6px;width:min(260px,70vw)">`:teamOf(m)?`<br><span class="small muted">${esc(teamOf(m))}</span>`:''}</span><span class="row">
+     ${(!m.uid||(m.uid!==me&&!m.google))&&!S.members.some(isMe)?`<button class="btn ghost small" data-claim="${m.id}">This is me</button>`:''}
+     ${isMe(m)?`<button class="btn ghost small" data-unclaim="${m.id}">Not me</button>`:''}
+     ${isCommish&&m.uid&&m.uid!==me?`<button class="btn ghost small" data-reset="${m.id}" title="Clear this sign-in so they can claim again">Reset sign-in</button>`:''}
      ${isCommish&&!S.allPicks.some(p=>p.member===m.id)?`<button class="btn ghost small" data-del="${m.id}">Remove</button>`:''}</span></div>
      ${isCommish&&lock?`<div class="row small" style="align-items:center;gap:6px;padding-top:0;border:0"><span class="muted">Re-picks for season ${viewSeason}: <strong>${repicksOf(m)}</strong></span><button class="btn ghost small" data-repick="${m.id}:-1"${repicksOf(m)?'':' disabled'} aria-label="One fewer re-pick">−</button><button class="btn ghost small" data-repick="${m.id}:1" aria-label="Give a re-pick">+</button></div>`:''}`).join('')}</div>`:'<p class="muted">No one yet. Add the first person below.</p>'}
    ${confirmKey?.startsWith('del:')?`<div class="confirm"><span>Remove ${esc(mname(confirmKey.slice(4)))}?</span><button class="btn danger" data-yes="${confirmKey}">Remove</button><button class="btn ghost" data-no>Keep</button></div>`:''}
@@ -920,7 +937,7 @@ function viewLeague(){
   const bf=(k,label)=>`<label class="field"><span class="label">${label}</span><input class="n" id="b-${k}" data-bonus="${k}" value="${esc(k==='spoon'?'-'+B(k):B(k))}" inputmode="numeric"${ro}></label>`;
   const sportsPanel=`<section class="panel"><h2>Sports this season</h2><p class="small muted">Choose which sports are in this season’s draft. ${lock?'The draft has started, so these are locked.':'Set these before you start the draft.'}</p>
    <div class="chips">${SPORTS.map(x=>`<button class="chip" data-sporton="${x.id}" aria-pressed="${!!S.cfg.sportsOn?.[x.id]}"${lock||!isCommish?' disabled':''}>${esc(x.short)}</button>`).join('')}</div></section>`;
-  return members+sportsPanel+`
+  return acct+members+sportsPanel+`
   <section class="panel"><h2>Special events</h2><p class="muted small">Turn on the big tournaments that land in your league year. Each person drafts one country or team, scored on the playoff scale (a title is worth ${ladder(5)}). Events added after the main draft get their own mini draft.</p>
    <div>${evs}</div>
    ${isCommish?`<form class="evform" id="addEvent"><div class="label">Add an event</div>
@@ -950,7 +967,6 @@ function viewLeague(){
     ${bf('spoon','Wooden spoon')}${bf('slamWin','Slam title')}${bf('slamFinal','Slam final')}
    </div></section>
   ${seasonsPanel()}
-  ${commishPanel()}
   ${isCommish&&(S.members.some(m=>m.test)||S.picks.length)?`<section class="panel"><h3>Wipe the test</h3><p class="small muted">Deletes every pick, removes the test drafters, undoes manual score changes and puts the draft back in setup. Real people you added stay.</p><div><button class="btn danger" data-act="wipeTest">Wipe test data</button></div>
    ${confirmKey==='wipeTest'?`<div class="confirm"><span>Delete all ${S.picks.length} picks and ${S.members.filter(m=>m.test).length} test drafters?</span><button class="btn danger" data-yes="wipeTest">Wipe it</button><button class="btn ghost" data-no>Cancel</button></div>`:''}</section>`:''}
   ${isCommish?`<section class="panel"><h3>Reset scores to automatic</h3><p class="small muted">Undoes every manual score correction and every “season is over” override, so the hourly update takes over again. Use this after testing. Records refill within the hour.</p><div><button class="btn ghost" data-act="resetScores">Reset scores</button></div>
@@ -994,7 +1010,7 @@ function alertMe(kind){
     try{new Notification(kind==='up'?'🍺 You’re on the clock':'⏳ 20 seconds left to pick',{body:'Guinness Gauntlet draft',icon:'icons/icon-192.png',tag:'gg-draft'})}catch(_){}}
 }
 function myTurn(){const d=D();if(!ready||d.status!=='live')return null;const i=draftPicks().length;if(i>=(d.order||[]).length*slotsTotal(d.slots))return null;
-  const m=S.members.find(x=>x.id===onClock(i));return m?.uid&&m.uid===me?{d,key:(d.base||0)+':'+i}:null}
+  const m=S.members.find(x=>x.id===onClock(i));return isMe(m)?{d,key:(d.base||0)+':'+i}:null}
 function checkMyTurn(){
   const t=myTurn();document.title=t?'🍺 You’re up! · '+TITLE:TITLE;if(!t)return;
   if(lastAlert!==t.key){lastAlert=t.key;alertMe('up')}
@@ -1008,11 +1024,12 @@ async function enableAlerts(){unlockAudio();chime(3);try{navigator.vibrate?.([20
   try{localStorage.setItem('gg-alerts','on')}catch(_){}keepAwake();render();toast('Draft alerts on. Keep this page open during the draft.')}
 
 function commishPanel(){
-  return `<section class="panel"><h3>Commissioner</h3>${isCommish
-    ?`<p class="small muted">Signed in as ${esc(email)}. You can run the draft, change settings and correct scores.</p><div><button class="btn ghost small" data-act="commishOut">Sign out</button></div>`
-    :email?`<p class="small muted">${esc(email)} isn’t the commissioner account.</p><div><button class="btn ghost small" data-act="commishOut">Sign out</button></div>`
-    :`<p class="small muted">Scores and settings are locked. Only the commissioner can change them.</p><div><button class="btn ghost small" data-act="commishIn">Commissioner sign in</button></div>`}</section>`;
+  const mine=myMember();
+  return `<section class="panel" id="acct"><h3>Your account</h3>${email
+    ?`<p class="small muted">Signed in as ${esc(email)}${isCommish?' (commissioner): you can run the draft, change settings and correct scores.':mine?` as ${esc(mine.name)}. Sign in with the same Google account on any phone or computer to pick and play there too.`:'. Now tap “This is me” on your name below.'}</p><div><button class="btn ghost small" data-act="commishOut">Sign out</button></div>`
+    :`<p class="small muted">You’re just looking. Sign in with Google to claim your name, make picks, use re-picks and save Split the G scores, on any device. Scores and settings stay locked to the commissioner.</p><div><button class="btn small" data-act="commishIn">Sign in with Google</button></div>`}</section>`;
 }
+const signInNote=what=>isPlayer()||isCommish?'':`<div class="notice" style="color:var(--cream)">Sign in to ${what}. <button class="btn ghost small" data-go="league">Sign in</button></div>`;
 
 /* ================= Writes ================= */
 const fail=e=>{console.error(e);toast(e?.code==='permission-denied'?'The database refused that change. Check the Firestore rules.':'Couldn’t save. Check your connection and try again.')};
@@ -1058,7 +1075,7 @@ function evOrderFor(kind){const st=standings().map(r=>r.m.id);
   if(kind==='main'){const o=(S.draft?.mainOrder||S.draft?.order||[]).filter(id=>st.includes(id));return [...o,...st.filter(id=>!o.includes(id))]}
   if(kind==='shuffle'){const o=[...st];for(let i=o.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[o[i],o[j]]=[o[j],o[i]]}return o}
   return st.reverse()}
-function canPickFor(mid){const m=S.members.find(x=>x.id===mid);return isCommish||!m?.uid||m.uid===me}
+function canPickFor(mid){const m=S.members.find(x=>x.id===mid);return isCommish||(isPlayer()&&(!m?.uid||m.uid===me))}
 async function autoPick(){
   const d=D(),i=draftPicks().length;if(d.status!=='live'||i>=d.order.length*slotsTotal(d.slots))return false;
   const mid=onClock(i),nd=need(mid),open=Object.keys(nd).filter(k=>nd[k]>0);if(!open.length)return false;
@@ -1093,6 +1110,7 @@ $('#view').addEventListener('click',async e=>{
   if(ds.gday!==undefined){gamesDay=ds.gday==='0'?0:gamesDay+Number(ds.gday);render();return}
   if(ds.tl){tlNote=ds.tl;const n=document.getElementById('tlNote');if(n)n.textContent=tlNote;return}
   if(ds.statmode){statMode=ds.statmode;render();return}
+  if(ds.open?.startsWith('sg:')){const id=ds.open.slice(3);sgOpen=sgOpen===id?null:id;render();return}
   if(ds.open?.startsWith('stat:')){const id=ds.open.slice(5);statOpen=statOpen===id?null:id;render();return}
   if(ds.open){openRow=openRow===ds.open?null:ds.open;render();return}
   if(ds.ssport){scoreSport=ds.ssport;render();return}
@@ -1101,8 +1119,8 @@ $('#view').addEventListener('click',async e=>{
   if(ds.pick){pending={sport:chooserSport(),team:ds.pick,flex:pickSport==='flex',key:(D().base||0)+':'+draftPicks().length};render();return}
   if(ds.no!==undefined){confirmKey=null;render();return}
   if(ds.act==='alerts'){await enableAlerts();return}
-  if(ds.act==='commishIn'){try{await AUTH.signIn();toast(isCommish?'Signed in as commissioner.':'That account isn’t the commissioner.')}catch(err){if(err?.code!=='auth/popup-closed-by-user')toast(err?.code==='auth/unauthorized-domain'?'Add this site under Firebase → Authentication → Settings → Authorized domains.':'Sign-in didn’t work. Try again.')}render();return}
-  if(ds.act==='commishOut'){await AUTH.signOut();return}
+  if(ds.act==='commishIn'){try{await AUTH.signIn();toast(isCommish?'Signed in as commissioner.':myMember()?`Signed in. Welcome back, ${myMember().name}.`:'Signed in. Now tap “This is me” on your name.')}catch(err){if(err?.code!=='auth/popup-closed-by-user')toast(err?.code==='auth/unauthorized-domain'?'Add this site under Firebase → Authentication → Settings → Authorized domains.':'Sign-in didn’t work. Try again.')}render();return}
+  if(ds.act==='commishOut'){await AUTH.signOut();toast('Signed out.');return}
   if(!canWrite)return;
   if(ds.swap){swapN=+ds.swap;swapTo=null;swapSport=null;render();document.getElementById('swapPanel')?.scrollIntoView({behavior:'smooth',block:'start'});return}
   if(ds.swapsport){swapSport=ds.swapsport;swapTo=null;render();return}
@@ -1110,10 +1128,13 @@ $('#view').addEventListener('click',async e=>{
   if(ds.act==='cancelSwap'){swapN=null;swapTo=null;render();return}
   if(ds.act==='doSwap'){await doSwap();return}
   if(ds.claim||ds.unclaim){/* anyone can claim their own name */}
+  else if(ds.reset&&isCommish){}
   else if(!ds.pick&&ds.act!=='confirmPick'&&ds.act!=='cancelPick'&&!ds.psport&&!isCommish)return;
   if(ds.move){const [i,dir]=ds.move.split(':').map(Number);const o=draftOrder();[o[i],o[i+dir]]=[o[i+dir],o[i]];return setDraft({...D(),status:'setup',order:o})}
-  if(ds.claim){const m=S.members.find(x=>x.id===ds.claim);m.uid=me;render();try{await db.doc('members/'+m.id).set((({id,...r})=>r)(m))}catch(err){fail(err)}return}
-  if(ds.unclaim){const m=S.members.find(x=>x.id===ds.unclaim);delete m.uid;render();try{await db.doc('members/'+m.id).set((({id,...r})=>r)(m))}catch(err){fail(err)}return}
+  if((ds.claim||ds.unclaim)&&!isPlayer()){toast('Sign in with Google first (top of this tab).');document.getElementById('acct')?.scrollIntoView({behavior:'smooth'});return}
+  if(ds.reset){const m=S.members.find(x=>x.id===ds.reset);if(!m)return;delete m.uid;delete m.google;render();try{await db.doc('members/'+m.id).set((({id,...r})=>r)(m))}catch(err){fail(err)}return}
+  if(ds.claim){const m=S.members.find(x=>x.id===ds.claim);m.uid=me;m.google=true;render();try{await db.doc('members/'+m.id).set((({id,...r})=>r)(m))}catch(err){fail(err)}return}
+  if(ds.unclaim){const m=S.members.find(x=>x.id===ds.unclaim);delete m.uid;delete m.google;render();try{await db.doc('members/'+m.id).set((({id,...r})=>r)(m))}catch(err){fail(err)}return}
   if(ds.del){confirmKey='del:'+ds.del;render();return}
   if(ds.repick){const [id,dv]=ds.repick.split(':'),m=S.members.find(x=>x.id===id);if(!m)return;
     m.repicks={...(m.repicks||{}),[viewSeason]:Math.max(0,repicksOf(m)+Number(dv))};render();const {id:_,...rest}=m;try{await db.doc('members/'+id).set(rest)}catch(err){fail(err)}return}
@@ -1196,7 +1217,7 @@ function onField(e){const t=e.target;if(!isCommish)return;
 }
 $('#view').addEventListener('input',e=>{if(e.target.tagName==='INPUT'&&e.target.type!=='checkbox')onField(e)});
 $('#view').addEventListener('change',async e=>{
-  if(e.target.dataset.teamname!==undefined){const m=S.members.find(x=>x.id===e.target.dataset.teamname);if(!m||!(isCommish||m.uid===me))return;
+  if(e.target.dataset.teamname!==undefined){const m=S.members.find(x=>x.id===e.target.dataset.teamname);if(!m||!(isCommish||isMe(m)))return;
     const val=e.target.value.trim().slice(0,40);m.teamBy={...(m.teamBy||{}),[viewSeason]:val};if(viewSeason===1)m.team=val;
     const {id,...rest}=m;try{await db.doc('members/'+id).set(rest);toast(val?`Team name saved for season ${viewSeason}.`:'Team name cleared.')}catch(err){fail(err)}render();return}
   if(e.target.dataset.onlyours!==undefined){onlyOurs=e.target.checked;render();return}
@@ -1237,11 +1258,13 @@ function sgLevelAt(poly,V){let lo=Math.min(...poly.map(q=>q[1])),hi=Math.max(...
 function sgStart(lvl){const L=SG_LEVELS[lvl];SG.lvl=lvl;SG.ang=0;SG.vel=0;SG.hold=false;SG.state='ready';SG.res=null;SG.settle=0;
   SG.V0=sgArea(sgClip(sgPoly(L),L.H-7));SG.V=SG.V0;sgPanel();sgDraw()}
 const sgFoam=(top,bottom)=>Math.min(12,(top-bottom)*.35);
-function sgScore(){const L=SG_LEVELS[SG.lvl],lvlY=sgLevelAt(sgPoly(L),SG.V),err=lvlY-L.g,mm=err/L.H*150;
+function sgScore(){const L=SG_LEVELS[SG.lvl],top=sgLevelAt(sgPoly(L),SG.V),lvlY=top-sgFoam(top,L.prof[0][0]),err=lvlY-L.g,mm=err/L.H*150;
   const a=Math.abs(mm),pts=a<=1.5?100:Math.max(0,Math.round(100-(a-1.5)*5));
   SG.res={mm,pts,split:a<=1.5};SG.scores[SG.lvl]=pts;SG.state='scored';sgPanel();if(SG.lvl===SG_LEVELS.length-1)sgFinish()}
 async function sgFinish(){const total=SG.scores.reduce((a,b)=>a+(b||0),0),m=myMember();SG.state='done';sgPanel();
-  if(!m||!db)return;const cur=S.splitg?.[m.id]||{},doc={best:Math.max(cur.best||0,total),last:total,runs:(cur.runs||0)+1,at:new Date().toISOString(),season:viewSeason};
+  if(!m||!db)return;const cur=S.splitg?.[m.id]||{},lv=SG_LEVELS.map((_,i)=>SG.scores[i]||0),isBest=total>(cur.best||0);
+  const doc={best:Math.max(cur.best||0,total),bestLevels:isBest||!cur.bestLevels?lv:cur.bestLevels,last:total,lastLevels:lv,
+    topLevels:lv.map((v,i)=>Math.max(v,cur.topLevels?.[i]||0)),runs:(cur.runs||0)+1,at:new Date().toISOString(),season:viewSeason};
   try{await db.doc('splitg/'+m.id).set(doc);S.splitg={...(S.splitg||{}),[m.id]:doc};render();if(total>(cur.best||0))toast(`New personal best: ${total}`)}
   catch(err){toast('Score not saved. The database rules need the Split the G line added.')}}
 function sgStep(t){if(!SG.el?.isConnected){SG.raf=0;return}const dt=Math.min(.05,(t-(SG.last||t))/1000);SG.last=t;
@@ -1290,9 +1313,9 @@ function sgDraw(){const cv=SG.cv;if(!cv)return;const L=SG_LEVELS[SG.lvl],dpr=win
 function sgPanel(){const p=SG.el?.querySelector('.sg-panel');if(!p)return;const L=SG_LEVELS[SG.lvl],total=SG.scores.reduce((a,b)=>a+(b||0),0),n=SG_LEVELS.length;
   const btn=SG.state==='scored'?`<button class="btn" data-sg="next">Next glass</button>`:SG.state==='done'?`<button class="btn" data-sg="again">Play again</button>`:`<button class="btn sg-hold" data-sg="hold">Hold to drink</button>`;
   p.innerHTML=`<div class="cardhead"><h3>Glass ${SG.lvl+1} of ${n}: ${esc(L.name)}</h3><span class="num">Total ${total}</span></div>
-   <p class="small muted">${esc(L.note)} Hold to tip the glass, let go to set it down, and stop with the top of the head right through the middle of the G. One gulp per glass.</p>
+   <p class="small muted">${esc(L.note)} Hold to tip the glass, let go to set it down, and stop with the line where the stout meets the head right through the middle of the G. One gulp per glass.</p>
    <div class="sg-dots">${SG_LEVELS.map((_,i)=>`<span class="${i<SG.lvl||SG.scores[i]!=null?'done':i===SG.lvl?'on':''}">${SG.scores[i]!=null?SG.scores[i]:i+1}</span>`).join('')}</div>
-   ${SG.state==='done'?`<p><strong>Final: ${total} of ${n*100}.</strong> ${myMember()?'Saved to the leaderboard if it beats your best.':'Tap “This is me” on the League tab to get on the leaderboard.'}</p>`:''}
+   ${SG.state==='done'?`<p><strong>Final: ${total} of ${n*100}.</strong> ${myMember()?'Saved to the leaderboard.':isPlayer()?'Tap “This is me” on the League tab to get on the leaderboard.':'Sign in on the League tab to get on the leaderboard.'}</p>`:''}
    <div class="sg-btns">${btn}</div>`;
   const hb=p.querySelector('[data-sg="hold"]');if(hb)sgHoldOn(hb)}
 function sgHoldOn(el){const on=e=>{e.preventDefault();if(SG.state==='ready'||SG.state==='drinking'){SG.hold=true}},off=()=>{SG.hold=false};
@@ -1305,11 +1328,15 @@ function sgEl(){if(SG.el)return SG.el;const d=document.createElement('section');
 document.addEventListener('keydown',e=>{if(e.code==='Space'&&tab==='splitg'&&!e.target.closest?.('input,textarea,select')){e.preventDefault();if(SG.state==='ready'||SG.state==='drinking')SG.hold=true}});
 document.addEventListener('keyup',e=>{if(e.code==='Space')SG.hold=false});
 function mountSplitG(){const m=$('#gameMount');if(!m)return;m.replaceWith(sgEl());sgPanel();if(!SG.raf){SG.last=0;SG.raf=requestAnimationFrame(sgStep)}}
+let sgOpen=null;
 function viewSplitG(){const rows=Object.entries(S.splitg||{}).map(([id,v])=>({m:S.members.find(x=>x.id===id),...v})).filter(r=>r.m).sort((a,b)=>b.best-a.best);
-  return `<div id="gameMount"></div>
+  const lvRow=(label,arr)=>arr?`<tr><td class="l small">${label}</td>${SG_LEVELS.map((_,i)=>`<td class="num">${arr[i]??'–'}</td>`).join('')}<td class="num total">${arr.reduce((a,b)=>a+(b||0),0)}</td></tr>`:'';
+  const detail=r=>`<tr class="detail"><td colspan="5"><div class="scroll"><table><tr><th class="l"></th>${SG_LEVELS.map(L=>`<th>${esc(L.name)}</th>`).join('')}<th>Total</th></tr>
+    ${lvRow('High-score run',r.bestLevels)}${lvRow('Last run',r.lastLevels)}${lvRow('Best ever per glass',r.topLevels)}</table></div>${r.bestLevels?'':'<p class="small muted">Glass-by-glass scores start with the next run.</p>'}</td></tr>`;
+  return signInNote('save your Split the G scores')+`<div id="gameMount"></div>
   <section class="panel"><div class="cardhead"><h2>Leaderboard</h2><span class="small muted">Best total over all ${SG_LEVELS.length} glasses</span></div>
-  ${rows.length?`<div class="scroll"><table><tr><th class="l">#</th><th class="l">Name</th><th>Best</th><th>Last</th><th>Runs</th></tr>${rows.map((r,i)=>`<tr><td class="num l">${i+1}</td><td class="l">${whoHtml(r.m.id)}</td><td class="num total">${r.best}</td><td class="num">${r.last??''}</td><td class="num">${r.runs||1}</td></tr>`).join('')}</table></div>`:'<p class="small muted">No scores yet. Be the first.</p>'}
-  <p class="small muted">Each glass scores up to 100: a split (within 1.5 mm of the middle of the G) is 100, and you lose 5 points for every millimetre off after that. Later glasses pour faster.</p></section>`}
+  ${rows.length?`<div class="scroll"><table><tr><th class="l">#</th><th class="l">Name</th><th>High score</th><th>Last run</th><th>Runs</th></tr>${rows.map((r,i)=>`<tr class="click" data-open="sg:${r.m.id}" aria-expanded="${sgOpen===r.m.id}"><td class="num l">${i+1}</td><td class="l">${whoHtml(r.m.id)}</td><td class="num total">${r.best}</td><td class="num">${r.last??''}</td><td class="num">${r.runs||1}</td></tr>`+(sgOpen===r.m.id?detail(r):'')).join('')}</table></div>`:'<p class="small muted">No scores yet. Be the first.</p>'}
+  <p class="small muted">Each glass scores up to 100: a split (within 1.5 mm of the middle of the G) is 100, and you lose 5 points for every millimetre off after that. Later glasses pour faster. Tap a name to see their score on each glass.</p></section>`}
 
 /* ================= Live data ================= */
 window.addEventListener('pageshow',e=>{if(e.persisted)location.reload()});
@@ -1326,7 +1353,7 @@ function rerender(){
   try{db=await connect()}catch(err){console.warn(err);ready=true;
     $('#syncLine').textContent='Not connected';
     $('#view').innerHTML=`<div class="notice">${err.code==='no-config'?'This site isn’t connected to its database yet. Paste your Firebase settings into config.js (see the README).':err.code==='auth/operation-not-allowed'?'Turn on Anonymous sign-in in Firebase → Authentication → Sign-in method.':'Couldn’t connect to the league database. Check your connection and reload.'}</div>`;return}
-  canWrite=true;
+  canWrite=true;setTimeout(markGoogleClaim,1500);
   let got=0;const done=s=>{if(s?.metadata?.fromCache)return;if(++got>=4&&!ready){ready=true;render()}};
   setTimeout(()=>{if(!ready){ready=true;render();toast('Still connecting. Showing what’s loaded.')}},10000);
   db.collection('members').orderBy('order').onSnapshot(s=>{S.members=s.docs.map(d=>({id:d.id,...d.data()}));done(s);rerender()},e=>{done();fail(e)});
